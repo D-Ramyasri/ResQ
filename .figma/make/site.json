@@ -1,0 +1,11 @@
+{
+  "title": "ResQ - Emergency Response Platform",
+  "description": "Streamline emergency response with AI-driven coordination, enabling citizens to report incidents and responders to manage resources effectively in real time.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}
