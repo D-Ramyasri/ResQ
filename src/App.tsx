@@ -26,8 +26,10 @@ function AppInner() {
         {currentUser?.role === 'citizen' && currentView === 'citizen_processing' && <ProcessingScreen />}
         {currentUser?.role === 'citizen' && currentView === 'citizen_active' && <ActiveEmergency />}
         {currentUser?.role === 'citizen' && currentView === 'citizen_dashboard' && <CitizenDashboard />}
-        {currentUser && !['citizen'].includes(currentUser.role) && currentUser.role !== 'command' && <ResponderDashboard />}
-        {currentUser?.role === 'command' && <CommandCenter />}
+        {currentUser && currentUser.role !== 'citizen' && currentUser.role !== 'command'
+          && ['responder_dashboard', 'responder_incident'].includes(currentView)
+          && <ResponderDashboard />}
+        {currentUser?.role === 'command' && currentView === 'command_center' && <CommandCenter />}
       </div>
 
       {/* Global overlays — always on top */}

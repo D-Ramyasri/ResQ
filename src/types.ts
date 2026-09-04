@@ -61,6 +61,9 @@ export interface AIAnalysis {
   requiredDomains: Domain[];
   confidence: number;
   recommendedResourceIds: string[];
+  summary?: string;
+  responderGuidance?: Record<string, string[]>;
+  analysisSource?: 'featherless' | 'resq_fallback';
 }
 
 export interface TimelineEvent {

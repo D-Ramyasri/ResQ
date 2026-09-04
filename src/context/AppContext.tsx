@@ -7,6 +7,7 @@ import {
   DEMO_USERS, INITIAL_INCIDENTS, INITIAL_RESOURCES, HOSPITALS,
   INITIAL_NOTIFICATIONS, INITIAL_AI_ALERTS,
 } from '../data/mockData';
+import { analyzeIncidentWithFeatherless, toSupportedDomains } from '../services/incidentAnalysis';
 
 export type View =
   | 'login' | 'citizen_dashboard' | 'citizen_report' | 'citizen_processing'
@@ -339,6 +340,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         requiredDomains: affectedDomains,
         confidence,
         recommendedResourceIds: recommendedIds,
+        analysisSource: 'resq_fallback',
       },
       assignedResourceIds: [],
       affectedDomains,
@@ -355,6 +357,59 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     dispatch({ type: 'SET_PROCESSING_INCIDENT', payload: incidentId });
     dispatch({ type: 'SET_CITIZEN_INCIDENT', payload: incidentId });
     dispatch({ type: 'SET_VIEW', payload: 'citizen_processing' });
+
+    void analyzeIncidentWithFeatherless({
+      category,
+      description: draft.description || 'Emergency reported via ResQ platform.',
+      location,
+    }).then(analysis => {
+      const responseDomains = toSupportedDomains(analysis.response_domains);
+      const recommendedResourceIds = Array.from(new Set(
+        analysis.recommended_resource_types.flatMap(resourceType => {
+          const typeMap: Record<string, Resource['type']> = {
+            police_unit: 'police', ambulance: 'ambulance', fire_truck: 'fire_truck', rescue_team: 'rescue',
+          };
+          const resourceTypeKey = typeMap[resourceType];
+          return resourceTypeKey
+            ? resources.filter(resource => resource.type === resourceTypeKey && resource.status === 'available').map(resource => resource.id)
+            : [];
+        })
+      )).slice(0, 3);
+
+      dispatch({
+        type: 'UPDATE_INCIDENT',
+        payload: {
+          id: incidentId,
+          changes: {
+            priority: analysis.priority,
+            severity: analysis.severity.toUpperCase() as Incident['severity'],
+            affectedDomains: responseDomains.length > 0 ? responseDomains : affectedDomains,
+            aiAnalysis: {
+              severity: analysis.severity.toUpperCase() as Incident['severity'],
+              priority: analysis.priority,
+              peopleAtRisk: analysis.people_at_risk,
+              injuries: analysis.summary,
+              hazards: analysis.hazards,
+              urgency: analysis.urgency,
+              requiredResources: analysis.recommended_resource_types,
+              requiredDomains: responseDomains.length > 0 ? responseDomains : affectedDomains,
+              recommendedResourceIds: recommendedResourceIds.length > 0 ? recommendedResourceIds : recommendedIds,
+              summary: analysis.summary,
+              responderGuidance: analysis.responder_guidance,
+              analysisSource: 'featherless',
+            },
+            timeline: [...newIncident.timeline, {
+              id: `t-featherless-${Date.now()}`,
+              timestamp: new Date(),
+              event: `Featherless AI analysis complete — ${analysis.priority} ${analysis.severity.toUpperCase()} — ${responseDomains.join(', ') || 'local response'} routing`,
+              type: 'ai' as const,
+            }],
+          },
+        },
+      });
+    }).catch(() => {
+      // The incident already contains the explicitly marked ResQ fallback analysis.
+    });
 
     // Notify each domain
     affectedDomains.forEach((domain, i) => {
@@ -405,7 +460,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         },
       });
     }, 5800);
-  }, [state.reportDraft, state.currentUser]);
+  }, [state.reportDraft, state.currentUser, state.resources]);
 
   const approveIncident = useCallback((incidentId: string) => {
     const inc = state.incidents.find(i => i.id === incidentId);
