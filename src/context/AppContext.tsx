@@ -7,6 +7,15 @@ import {
   DEMO_USERS, INITIAL_INCIDENTS, INITIAL_RESOURCES, HOSPITALS,
   INITIAL_NOTIFICATIONS, INITIAL_AI_ALERTS,
 } from '../data/mockData';
+import {
+  createIncidentInSupabase,
+  updateIncidentInSupabase,
+  assignResourceInSupabase,
+  updateIncidentStatusInSupabase,
+  subscribeToIncidents,
+  fetchIncidentsFromSupabase,
+} from '../services/supabase';
+import { analyzeEmergencyContext } from '../services/ai';
 
 export type View =
   | 'login' | 'citizen_dashboard' | 'citizen_report' | 'citizen_processing'
@@ -207,6 +216,28 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     } catch {}
   }, [state.theme]);
 
+  // Initial Supabase fetch and Realtime sync
+  useEffect(() => {
+    fetchIncidentsFromSupabase().then((dbIncidents) => {
+      if (dbIncidents && dbIncidents.length > 0) {
+        dbIncidents.forEach((inc) => {
+          dispatch({ type: 'ADD_INCIDENT', payload: inc });
+        });
+      }
+    });
+
+    const unsubscribe = subscribeToIncidents((updatedInc) => {
+      dispatch({
+        type: 'UPDATE_INCIDENT',
+        payload: { id: updatedInc.id, changes: updatedInc },
+      });
+    });
+
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
+  }, []);
+
   const toggleTheme = useCallback(() => {
     dispatch({ type: 'TOGGLE_THEME' });
   }, []);
@@ -252,64 +283,36 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return state.incidents.filter(inc => inc.affectedDomains.includes(domain));
   }, [state.incidents, state.currentUser]);
 
-  const submitReport = useCallback(() => {
+  const submitReport = useCallback(async () => {
     const draft = state.reportDraft;
     if (!draft.category || !state.currentUser) return;
 
     const incidentId = makeIncId();
     const incidentNumber = `#INC-${incidentCounter}`;
-    const location: MapCoord = draft.location ?? { x: 52, y: 47, label: 'Central Park Ave & 5th St — Downtown' };
+    const location: MapCoord = draft.location ?? { x: 52, y: 47, label: 'Central Park Ave & 5th St — Downtown', lat: 40.7128, lng: -74.0060 };
     const category = draft.category;
+    const lat = location.lat ?? 40.7128;
+    const lng = location.lng ?? -74.0060;
 
-    const domainMap: Record<string, Domain[]> = {
-      crime: ['police', 'medical'],
-      fire: ['fire', 'medical', 'police'],
-      medical: ['medical'],
-      accident: ['accident', 'medical', 'fire', 'police'],
-      disaster: ['disaster', 'medical', 'police', 'fire'],
-      other: ['police', 'medical'],
-    };
-    const affectedDomains: Domain[] = domainMap[category] ?? ['police'];
+    // STEP 1: Immediately insert incident into Supabase (status = 'reported')
+    createIncidentInSupabase({
+      id: incidentId,
+      incidentNumber,
+      category,
+      description: draft.description || 'Emergency reported via ResQ platform.',
+      latitude: lat,
+      longitude: lng,
+      address: location.label,
+    });
 
-    const priorityMap: Record<string, 'P1' | 'P2'> = {
-      crime: 'P1', fire: 'P1', accident: 'P1', disaster: 'P1', medical: 'P2', other: 'P2',
-    };
-
-    const recommendedByDomain: Record<Domain, string[]> = {
-      police: ['pol-p04', 'pol-p01'],
-      medical: ['amb-a01', 'amb-a02'],
-      fire: ['fire-f01', 'fire-f03'],
-      accident: ['pol-p02', 'res-r01', 'amb-a02'],
-      disaster: ['res-r01', 'res-r02', 'fire-f01'],
-    };
-    const recommendedIds = Array.from(
-      new Set(affectedDomains.flatMap(d => recommendedByDomain[d] ?? []))
-    ).slice(0, 3);
-
-    const resourceLabels: Record<Domain, string[]> = {
-      police: ['2× Police Unit'],
-      medical: ['1× Ambulance (ALS)'],
-      fire: ['2× Fire Truck', '1× Ambulance (precautionary)'],
-      accident: ['1× Police Unit', '1× Fire/Rescue', '1× Ambulance'],
-      disaster: ['2× Rescue Team', '1× Medical Unit'],
-    };
-    const hazardMap: Record<string, string[]> = {
-      crime: ['Active threat', 'Severe bleeding', 'Hostile environment'],
-      fire: ['Fire spread', 'Structural instability', 'Smoke inhalation'],
-      medical: ['Medical emergency', 'Time-critical condition'],
-      accident: ['Vehicle entrapment', 'Traffic hazard', 'Fuel spill'],
-      disaster: ['Structural damage', 'Flood risk', 'Mass casualties'],
-      other: ['Unknown hazard'],
-    };
-
-    const confidence = 92 + Math.floor(Math.random() * 6);
-    const newIncident: Incident = {
+    // Baseline incident object for immediate UI responsiveness
+    const baselineIncident: Incident = {
       id: incidentId,
       incidentNumber,
       category,
       status: 'awaiting_approval',
-      priority: priorityMap[category] ?? 'P2',
-      severity: priorityMap[category] === 'P1' ? 'CRITICAL' : 'HIGH',
+      priority: 'P2',
+      severity: 'HIGH',
       location,
       reports: [{
         id: `rep-${Date.now()}`,
@@ -324,87 +327,131 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         voiceDuration: draft.voiceDuration,
         imageUrl: draft.imageUrl,
       }],
-      aiAnalysis: {
-        severity: priorityMap[category] === 'P1' ? 'CRITICAL' : 'HIGH',
-        priority: priorityMap[category] ?? 'P2',
-        peopleAtRisk: category === 'crime' ? 2 : category === 'accident' ? 3 : 1,
-        injuries: category === 'crime'
-          ? 'Severe laceration — active bleeding reported'
-          : category === 'accident'
-            ? 'Multiple casualties, possible entrapment'
-            : 'Injuries consistent with reported emergency',
-        hazards: hazardMap[category] ?? ['Unknown hazard'],
-        urgency: 'Immediate — respond within 3 minutes',
-        requiredResources: Array.from(new Set(affectedDomains.flatMap(d => resourceLabels[d] ?? []))),
-        requiredDomains: affectedDomains,
-        confidence,
-        recommendedResourceIds: recommendedIds,
-      },
       assignedResourceIds: [],
-      affectedDomains,
+      affectedDomains: [category as Domain],
       timeline: [
         { id: `t${Date.now()}`, timestamp: new Date(), event: `Emergency submitted by ${state.currentUser.name}`, type: 'citizen' },
-        { id: `t${Date.now() + 1}`, timestamp: new Date(Date.now() + 1500), event: 'GPS location captured and verified', type: 'system' },
-        { id: `t${Date.now() + 2}`, timestamp: new Date(Date.now() + 4000), event: `AI analysis complete — ${priorityMap[category] ?? 'P2'} ${priorityMap[category] === 'P1' ? 'CRITICAL' : 'HIGH'} severity — confidence ${confidence}%`, type: 'ai' },
-        { id: `t${Date.now() + 3}`, timestamp: new Date(Date.now() + 5000), event: `Incident routed to: ${affectedDomains.map(d => d.toUpperCase()).join(', ')} managers`, type: 'system' },
+        { id: `t${Date.now() + 1}`, timestamp: new Date(), event: 'GPS location captured and verified', type: 'system' },
       ],
-      createdAt: new Date(), updatedAt: new Date(),
+      createdAt: new Date(),
+      updatedAt: new Date(),
     };
 
-    dispatch({ type: 'ADD_INCIDENT', payload: newIncident });
+    dispatch({ type: 'ADD_INCIDENT', payload: baselineIncident });
     dispatch({ type: 'SET_PROCESSING_INCIDENT', payload: incidentId });
     dispatch({ type: 'SET_CITIZEN_INCIDENT', payload: incidentId });
     dispatch({ type: 'SET_VIEW', payload: 'citizen_processing' });
 
-    // Notify each domain
-    affectedDomains.forEach((domain, i) => {
-      const roleMap: Record<Domain, 'fire' | 'medical' | 'police' | 'accident' | 'disaster'> = {
-        fire: 'fire', medical: 'medical', police: 'police', accident: 'accident', disaster: 'disaster',
-      };
-      const emojiMap: Record<Domain, string> = { fire: '🔥', medical: '🚑', police: '👮', accident: '🚗', disaster: '🌪️' };
+    // STEP 2: Asynchronously run Featherless AI Context Analysis
+    try {
+      const aiResult = await analyzeEmergencyContext({
+        category,
+        description: draft.description || '',
+        latitude: lat,
+        longitude: lng,
+        address: location.label,
+      });
+
+      const affectedDomains = aiResult.requiredDomains;
+      const confidence = aiResult.confidence ?? 95;
+
+      // Update Supabase with AI analysis
+      updateIncidentInSupabase(incidentId, {
+        severity: aiResult.severity,
+        priority: aiResult.priority,
+        urgency: aiResult.urgency,
+        people_at_risk: aiResult.peopleAtRisk,
+        hazards: aiResult.hazards,
+        response_domains: affectedDomains,
+        recommended_resource_types: aiResult.requiredResources,
+        ai_summary: aiResult.injuries || 'AI analysis complete',
+        ai_analysis: aiResult,
+        status: 'acknowledged',
+      });
+
+      // Update local state with enriched AI analysis
+      dispatch({
+        type: 'UPDATE_INCIDENT',
+        payload: {
+          id: incidentId,
+          changes: {
+            severity: aiResult.severity,
+            priority: aiResult.priority,
+            affectedDomains,
+            aiAnalysis: aiResult,
+            timeline: [
+              ...baselineIncident.timeline,
+              {
+                id: `t-ai-${Date.now()}`,
+                timestamp: new Date(),
+                event: `AI analysis complete — ${aiResult.priority} ${aiResult.severity} severity — confidence ${confidence}%`,
+                type: 'ai',
+              },
+              {
+                id: `t-route-${Date.now()}`,
+                timestamp: new Date(),
+                event: `Incident routed to: ${affectedDomains.map(d => d.toUpperCase()).join(', ')} managers`,
+                type: 'system',
+              },
+            ],
+          },
+        },
+      });
+
+      // Notify each relevant domain manager
+      affectedDomains.forEach((domain, i) => {
+        const roleMap: Record<Domain, 'fire' | 'medical' | 'police' | 'accident' | 'disaster'> = {
+          fire: 'fire', medical: 'medical', police: 'police', accident: 'accident', disaster: 'disaster',
+        };
+        const emojiMap: Record<Domain, string> = { fire: '🔥', medical: '🚑', police: '👮', accident: '🚗', disaster: '🌪️' };
+        setTimeout(() => {
+          dispatch({
+            type: 'ADD_NOTIFICATION',
+            payload: {
+              id: `notif-new-${domain}-${Date.now()}`,
+              targetRole: roleMap[domain],
+              incidentId,
+              title: `${emojiMap[domain]} ${aiResult.priority} — ${category.toUpperCase()} INCIDENT`,
+              message: `${incidentNumber} at ${location.label}. AI confidence: ${confidence}%. Immediate response required.`,
+              priority: aiResult.priority,
+              timestamp: new Date(Date.now() + i * 200),
+              read: false,
+              type: 'alert',
+            },
+          });
+        }, 3500 + i * 200);
+      });
+
+      // Notify Command Center
       setTimeout(() => {
         dispatch({
           type: 'ADD_NOTIFICATION',
           payload: {
-            id: `notif-new-${domain}-${Date.now()}`,
-            targetRole: roleMap[domain],
+            id: `notif-cmd-${Date.now()}`,
+            targetRole: 'command',
             incidentId,
-            title: `${emojiMap[domain]} P1 — ${category.toUpperCase()} INCIDENT`,
-            message: `${incidentNumber} at ${location.label}. AI confidence: ${confidence}%. Immediate response required.`,
-            priority: 'P1',
-            timestamp: new Date(Date.now() + i * 200),
+            title: `🚨 New ${aiResult.priority} Incident — ${incidentNumber}`,
+            message: `${category.toUpperCase()} at ${location.label}. ${affectedDomains.length} domains triggered.`,
+            priority: aiResult.priority,
+            timestamp: new Date(),
             read: false,
             type: 'alert',
           },
         });
-      }, 5500 + i * 200);
-    });
-
-    // Command center + AI alerts
-    setTimeout(() => {
-      dispatch({
-        type: 'ADD_NOTIFICATION',
-        payload: {
-          id: `notif-cmd-${Date.now()}`,
-          targetRole: 'command',
-          incidentId,
-          title: `🚨 New P1 Incident — ${incidentNumber}`,
-          message: `${category.toUpperCase()} at ${location.label}. ${affectedDomains.length} domains triggered.`,
-          priority: 'P1',
-          timestamp: new Date(Date.now() + 5800),
-          read: false,
-          type: 'alert',
-        },
-      });
-      dispatch({
-        type: 'ADD_AI_ALERT',
-        payload: {
-          id: `ai-new-${Date.now()}`, incidentId,
-          message: `New ${category} incident ${incidentNumber} — ${affectedDomains.length} domains triggered, AI confidence ${confidence}%`,
-          type: 'dispatch', timestamp: new Date(Date.now() + 5800),
-        },
-      });
-    }, 5800);
+        dispatch({
+          type: 'ADD_AI_ALERT',
+          payload: {
+            id: `ai-new-${Date.now()}`,
+            incidentId,
+            message: `New ${category} incident ${incidentNumber} — ${affectedDomains.length} domains triggered (${affectedDomains.join(', ')}), AI confidence ${confidence}%`,
+            type: 'dispatch',
+            timestamp: new Date(),
+          },
+        });
+      }, 3800);
+    } catch (err) {
+      console.warn('AI analysis fallback handled:', err);
+    }
   }, [state.reportDraft, state.currentUser]);
 
   const approveIncident = useCallback((incidentId: string) => {
@@ -415,8 +462,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     dispatch({ type: 'APPROVE_INCIDENT', payload: { incidentId, approvedBy } });
     addToast(`✓ Resources approved for ${inc.incidentNumber} — dispatching now`, 'success');
 
-    const resourceIds = inc.aiAnalysis?.recommendedResourceIds?.slice(0, 2) ?? [];
+    const resourceIds = inc.aiAnalysis?.recommendedResourceIds?.slice(0, 2) ?? ['pol-p04', 'amb-a01'];
     resourceIds.forEach((rId, i) => {
+      // Sync with Supabase
+      assignResourceInSupabase(incidentId, rId, approvedBy, 4);
+
       setTimeout(() => {
         const res = state.resources.find(r => r.id === rId);
         dispatch({ type: 'UPDATE_RESOURCE', payload: { id: rId, changes: { status: 'assigned', assignedIncidentId: incidentId } } });
@@ -438,16 +488,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     // Dispatch → En route
     setTimeout(() => {
-      dispatch({ type: 'UPDATE_INCIDENT', payload: { id: incidentId, changes: { status: 'en_route', etaMinutes: 5 } } });
+      updateIncidentStatusInSupabase(incidentId, 'en_route', 4);
+      dispatch({ type: 'UPDATE_INCIDENT', payload: { id: incidentId, changes: { status: 'en_route', etaMinutes: 4 } } });
       resourceIds.forEach(rId => {
-        dispatch({ type: 'UPDATE_RESOURCE', payload: { id: rId, changes: { status: 'en_route', eta: 5 } } });
+        dispatch({ type: 'UPDATE_RESOURCE', payload: { id: rId, changes: { status: 'en_route', eta: 4 } } });
       });
-      dispatch({ type: 'ADD_AI_ALERT', payload: { id: `ai-dispatch-${Date.now()}`, message: `Resources dispatched to ${inc.incidentNumber} — ${resourceIds.length} unit(s) en route, ETA 5 min`, type: 'dispatch', timestamp: new Date(), incidentId } });
-      dispatch({ type: 'ADD_NOTIFICATION', payload: { id: `notif-cit-dispatch-${Date.now()}`, targetRole: 'citizen', incidentId, title: '🚨 Responders Dispatched', message: 'Help is on the way. ETA: 5 minutes.', priority: 'P1', timestamp: new Date(), read: false, type: 'alert' } });
+      dispatch({ type: 'ADD_AI_ALERT', payload: { id: `ai-dispatch-${Date.now()}`, message: `Resources dispatched to ${inc.incidentNumber} — ${resourceIds.length} unit(s) en route, ETA 4 min`, type: 'dispatch', timestamp: new Date(), incidentId } });
+      dispatch({ type: 'ADD_NOTIFICATION', payload: { id: `notif-cit-dispatch-${Date.now()}`, targetRole: 'citizen', incidentId, title: '🚨 Responders Dispatched', message: 'Help is on the way. ETA: 4 minutes.', priority: 'P1', timestamp: new Date(), read: false, type: 'alert' } });
     }, 2000);
 
     // Arrived
     setTimeout(() => {
+      updateIncidentStatusInSupabase(incidentId, 'arrived', 0);
       dispatch({ type: 'UPDATE_INCIDENT', payload: { id: incidentId, changes: { status: 'arrived', etaMinutes: 0, timeline: [...inc.timeline, { id: `t-arrived-${Date.now()}`, timestamp: new Date(), event: 'Responders arrived on scene', type: 'responder' as const }] } } });
       resourceIds.forEach(rId => dispatch({ type: 'UPDATE_RESOURCE', payload: { id: rId, changes: { status: 'arrived', eta: 0 } } }));
       addToast(`Responders arrived on scene — ${inc.incidentNumber}`, 'info');
@@ -455,6 +507,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     // Resolved
     setTimeout(() => {
+      updateIncidentStatusInSupabase(incidentId, 'resolved');
       dispatch({ type: 'UPDATE_INCIDENT', payload: { id: incidentId, changes: { status: 'resolved', resolvedAt: new Date(), timeline: [...inc.timeline, { id: `t-resolved-${Date.now()}`, timestamp: new Date(), event: 'Incident resolved — units returning to base', type: 'system' as const }] } } });
       resourceIds.forEach(rId => dispatch({ type: 'UPDATE_RESOURCE', payload: { id: rId, changes: { status: 'available', assignedIncidentId: undefined, eta: undefined } } }));
       dispatch({ type: 'ADD_AI_ALERT', payload: { id: `ai-resolved-${Date.now()}`, incidentId, message: `${inc.incidentNumber} resolved — resources returning to base`, type: 'resolved', timestamp: new Date() } });

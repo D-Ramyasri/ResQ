@@ -1,22 +1,37 @@
 import React from 'react';
 import type { Priority, IncidentStatus, ResourceStatus, IncidentCategory, Domain, TimelineEvent } from '../types';
 
-export const CATEGORY_META: Record<IncidentCategory, { emoji: string; label: string; color: string }> = {
+export const CATEGORY_META: Record<string, { emoji: string; label: string; color: string }> = {
   fire: { emoji: '🔥', label: 'Fire', color: '#f97316' },
   medical: { emoji: '🚑', label: 'Medical', color: '#ef4444' },
   accident: { emoji: '🚗', label: 'Accident', color: '#f59e0b' },
   crime: { emoji: '👮', label: 'Crime', color: '#3b82f6' },
   disaster: { emoji: '🌪️', label: 'Disaster', color: '#8b5cf6' },
   other: { emoji: '🤖', label: 'Other / AI Detect', color: '#6b7280' },
+  police: { emoji: '👮', label: 'Police / Law Enf.', color: '#3b82f6' },
 };
 
-export const DOMAIN_META: Record<Domain, { emoji: string; label: string; color: string }> = {
+export const DOMAIN_META: Record<string, { emoji: string; label: string; color: string }> = {
   fire: { emoji: '🔥', label: 'Fire', color: '#f97316' },
   medical: { emoji: '🚑', label: 'Medical', color: '#ef4444' },
   police: { emoji: '👮', label: 'Police', color: '#3b82f6' },
   accident: { emoji: '🚗', label: 'Accident/Traffic', color: '#f59e0b' },
   disaster: { emoji: '🌪️', label: 'Disaster/Rescue', color: '#8b5cf6' },
+  crime: { emoji: '👮', label: 'Police', color: '#3b82f6' },
+  other: { emoji: '🤖', label: 'AI Operations', color: '#6b7280' },
 };
+
+export function getDomainMeta(d?: string) {
+  if (!d) return { emoji: '🚨', label: 'General', color: '#3b82f6' };
+  const key = d.toLowerCase();
+  return DOMAIN_META[key] || { emoji: '🚨', label: d.toUpperCase(), color: '#3b82f6' };
+}
+
+export function getCategoryMeta(c?: string) {
+  if (!c) return { emoji: '🚨', label: 'Emergency', color: '#ef4444' };
+  const key = c.toLowerCase();
+  return CATEGORY_META[key] || { emoji: '🚨', label: c.toUpperCase(), color: '#ef4444' };
+}
 
 export const PRIORITY_COLORS: Record<Priority, { bg: string; text: string; border: string; label: string }> = {
   P1: { bg: 'rgba(239, 68, 68, 0.15)', text: '#ef4444', border: '#ef4444', label: 'P1 CRITICAL' },
@@ -145,13 +160,13 @@ export function IncidentTimeline({ events }: { events: TimelineEvent[] }) {
   );
 }
 
-export function DomainRow({ active }: { active: Domain[] }) {
+export function DomainRow({ active }: { active: (Domain | string)[] }) {
   const ALL_DOMAINS: Domain[] = ['fire', 'medical', 'police', 'accident', 'disaster'];
   return (
     <div className="grid grid-cols-5 gap-1">
       {ALL_DOMAINS.map(d => {
-        const m = DOMAIN_META[d];
-        const isActive = active.includes(d);
+        const m = getDomainMeta(d);
+        const isActive = active.includes(d) || (d === 'police' && active.includes('crime'));
         return (
           <div
             key={d}
@@ -159,12 +174,15 @@ export function DomainRow({ active }: { active: Domain[] }) {
             style={{
               background: isActive ? `${m.color}18` : 'var(--bg-surface)',
               border: `1px solid ${isActive ? m.color : 'var(--border-subtle)'}`,
-              opacity: isActive ? 1 : 0.45,
+              opacity: isActive ? 1 : 0.4,
             }}
           >
-            <span className="text-base">{m.emoji}</span>
-            <span className="font-mono text-xs font-semibold" style={{ color: isActive ? m.color : 'var(--text-dim)' }}>
-              {isActive ? '✓' : '✗'}
+            <span className="text-xl">{m.emoji}</span>
+            <span
+              className="font-mono text-xs font-semibold uppercase tracking-wider"
+              style={{ color: isActive ? m.color : 'var(--text-muted)' }}
+            >
+              {m.label.split('/')[0]}
             </span>
           </div>
         );

@@ -3,6 +3,7 @@ import { useApp } from '../../context/AppContext';
 import {
   PriorityBadge, StatusBadge, ResourceStatusBadge, AIConfidenceMeter,
   DomainRow, IncidentTimeline, CATEGORY_META, DOMAIN_META, SectionLabel,
+  getCategoryMeta, getDomainMeta,
 } from '../../components/Shared';
 import type { Incident, Resource } from '../../types';
 
@@ -20,7 +21,7 @@ export default function IncidentDetail({ incident }: Props) {
     .map(id => resources.find(r => r.id === id))
     .filter(Boolean) as Resource[];
 
-  const catMeta = CATEGORY_META[incident.category];
+  const catMeta = getCategoryMeta(incident.category);
   const canApprove = incident.status === 'awaiting_approval';
 
   return (
@@ -78,7 +79,7 @@ export default function IncidentDetail({ incident }: Props) {
         <DomainRow active={incident.affectedDomains} />
         <div className="mt-3 space-y-1">
           {incident.affectedDomains.map(d => {
-            const dm = DOMAIN_META[d];
+            const dm = getDomainMeta(d);
             const domainResources = assignedResources.filter(r => {
               const typeMap: Record<string, string[]> = {
                 fire: ['fire_truck'], medical: ['ambulance'],
@@ -167,9 +168,23 @@ export default function IncidentDetail({ incident }: Props) {
             border: isDark ? '1px solid #1e3a5f' : '1px solid #bfdbfe',
             boxShadow: 'var(--shadow-elevation)',
           }}>
-          <div className="flex items-center gap-2 mb-4">
-            <span className="text-xl">🤖</span>
-            <div className="font-display text-lg font-bold" style={{ color: '#2563eb' }}>AI Context Analysis</div>
+          <div className="flex items-center justify-between flex-wrap gap-2 mb-4">
+            <div className="flex items-center gap-2">
+              <span className="text-xl">🤖</span>
+              <div className="font-display text-lg font-bold" style={{ color: '#2563eb' }}>AI Context Analysis</div>
+            </div>
+            {incident.aiAnalysis.source === 'featherless_live' ? (
+              <span className="font-mono text-[11px] px-2.5 py-1 rounded-full font-bold flex items-center gap-1.5"
+                style={{ background: '#22c55e22', color: '#16a34a', border: '1px solid #22c55e44' }}>
+                <span className="w-1.5 h-1.5 rounded-full" style={{ background: '#22c55e' }} />
+                <span>FEATHERLESS.AI LIVE ({incident.aiAnalysis.modelUsed?.split('/').pop() || 'Llama-3.1'})</span>
+              </span>
+            ) : (
+              <span className="font-mono text-[11px] px-2 py-0.5 rounded font-medium"
+                style={{ background: 'var(--bg-surface)', color: 'var(--text-muted)', border: '1px solid var(--border-subtle)' }}>
+                Deterministic Engine Fallback
+              </span>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-4 mb-4">
@@ -200,6 +215,14 @@ export default function IncidentDetail({ incident }: Props) {
           </div>
 
           <div className="space-y-3">
+            {incident.aiAnalysis.summary && (
+              <div>
+                <div className="font-mono text-xs mb-1 font-semibold" style={{ color: 'var(--text-dim)' }}>OPERATIONAL SUMMARY</div>
+                <div className="text-sm font-medium leading-relaxed" style={{ color: 'var(--text-primary)' }}>
+                  {incident.aiAnalysis.summary}
+                </div>
+              </div>
+            )}
             <div>
               <div className="font-mono text-xs mb-1 font-semibold" style={{ color: 'var(--text-dim)' }}>INJURIES INDICATOR</div>
               <div className="text-sm" style={{ color: 'var(--text-secondary)' }}>{incident.aiAnalysis.injuries}</div>
@@ -215,6 +238,29 @@ export default function IncidentDetail({ incident }: Props) {
                 ))}
               </div>
             </div>
+            {incident.aiAnalysis.responderGuidance && (
+              <div>
+                <div className="font-mono text-xs mb-1 font-semibold" style={{ color: 'var(--text-dim)' }}>RESPONDER PRE-ARRIVAL GUIDANCE</div>
+                <div className="space-y-2 mt-1">
+                  {Object.entries(incident.aiAnalysis.responderGuidance).map(([domainKey, guidanceList]) => (
+                    <div key={domainKey} className="rounded-xl p-3" style={{ background: isDark ? '#0a1628' : '#ffffff', border: '1px solid var(--border-subtle)' }}>
+                      <div className="font-mono text-xs font-bold uppercase mb-1.5 flex items-center gap-1.5" style={{ color: '#3b82f6' }}>
+                        <span>🛡️</span>
+                        <span>{domainKey} UNIT BRIEFING</span>
+                      </div>
+                      <div className="space-y-1">
+                        {guidanceList.map((g, gi) => (
+                          <div key={gi} className="text-xs flex items-start gap-1.5" style={{ color: 'var(--text-secondary)' }}>
+                            <span className="font-bold text-blue-500">•</span>
+                            <span>{g}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             <div>
               <div className="font-mono text-xs mb-1 font-semibold" style={{ color: 'var(--text-dim)' }}>REQUIRED RESOURCES</div>
               <div className="flex flex-wrap gap-1.5">

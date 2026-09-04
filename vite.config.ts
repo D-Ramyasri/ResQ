@@ -1,4 +1,4 @@
-import { defineConfig, type HtmlTagDescriptor, type Plugin } from 'vite'
+import { defineConfig, loadEnv, type HtmlTagDescriptor, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import path from 'node:path'
@@ -7,6 +7,7 @@ import siteConfiguration from './.figma/make/site.json'
 
 // Vite config — https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
+  const env = loadEnv(mode, process.cwd(), '')
   // .figma/make/deploy-preview passes `--mode development` for cached-preview builds.
   const emitSourcemaps = mode === 'development'
 
@@ -23,6 +24,7 @@ export default defineConfig(({ mode }) => {
       figmaErrorOverlayReplay(),
       figmaReactRefreshBoundaryFallback(),
       figmaMakeKitPlugin({ storiesGlob: '/src/**/*.stories.{ts,tsx,js,jsx}' }),
+      featherlessServerProxy(env),
     ],
     resolve: {
       alias: {
@@ -41,6 +43,7 @@ export default defineConfig(({ mode }) => {
     },
   }
 })
+
 
 type FigmaSiteConfiguration = {
   title?: string
@@ -354,3 +357,300 @@ function figmaMakeKitPlugin(options: { storiesGlob: string | string[] }): Plugin
     },
   }
 }
+
+function getDeterministicFallbackConfig(category: string, description: string, etaMinutes?: number) {
+  const desc = (description || '').toLowerCase();
+  const cat = (category || 'other').toLowerCase();
+
+  const isSevereCrime = cat === 'crime' && (desc.includes('bleed') || desc.includes('attack') || desc.includes('injur') || desc.includes('wound') || desc.includes('shot') || desc.includes('stab') || desc.includes('unconscious'));
+  const isSevereAccident = cat === 'accident' && (desc.includes('trap') || desc.includes('sever') || desc.includes('multi') || desc.includes('fire') || desc.includes('casualt') || desc.includes('injur'));
+  const isSevereFire = cat === 'fire' && (desc.includes('trap') || desc.includes('spread') || desc.includes('explos') || desc.includes('smoke') || desc.includes('burn'));
+
+  if (isSevereCrime) {
+    return {
+      severity: 'CRITICAL',
+      priority: 'P1',
+      urgency: 'immediate',
+      people_at_risk: 2,
+      hazards: ['Active hostile threat', 'Severe bleeding/trauma', 'Crowd safety risk'],
+      response_domains: ['police', 'medical'],
+      recommended_resource_types: ['police_unit', 'ambulance'],
+      summary: 'Violent crime with severe injury requiring combined police perimeter control and immediate paramedic trauma care.',
+      responder_guidance: {
+        police: [
+          'Approach with tactical caution; suspect reported in vicinity',
+          'Secure perimeter to allow safe paramedic ingress',
+          'Preserve physical evidence and establish command post'
+        ],
+        medical: [
+          'Prepare ALS hemorrhage control and trauma dressings',
+          'Coordinate staged entry with police units',
+          'Designate direct transport route to level-1 trauma center'
+        ]
+      },
+      pre_arrival_guidance: {
+        citizen: [
+          'Stay in a secure location away from the attacker',
+          'Apply direct pressure to bleeding wounds using clean cloth if safe',
+          `First responders are en route${etaMinutes ? ` (ETA: ${etaMinutes}m)` : ''}; keep clear for emergency access`
+        ]
+      },
+      confidence: 96,
+    };
+  }
+  if (isSevereAccident) {
+    return {
+      severity: 'CRITICAL',
+      priority: 'P1',
+      urgency: 'immediate',
+      people_at_risk: 3,
+      hazards: ['Vehicle entrapment', 'Fuel leak', 'Traffic hazard', 'Multiple casualties'],
+      response_domains: ['accident', 'medical', 'fire', 'police'],
+      recommended_resource_types: ['police_unit', 'ambulance', 'fire_truck', 'rescue_unit'],
+      summary: 'Major multi-vehicle collision with trapped occupants requiring rescue extrication, ALS transport, and traffic containment.',
+      responder_guidance: {
+        accident: [
+          'Stage hydraulic extrication tools and vehicle stabilizers',
+          'Deploy absorbent pads for fuel spills and hazard containment'
+        ],
+        medical: [
+          'Triage casualties upon extraction and initiate rapid ALS transport',
+          'Prepare cervical collars and full spine immobilization'
+        ],
+        police: [
+          'Close inbound traffic lanes and establish safe perimeter for rescue'
+        ]
+      },
+      pre_arrival_guidance: {
+        citizen: [
+          'Do not move injured individuals unless imminent fire or explosion hazard',
+          'Turn off vehicle ignitions if accessible without entering roadway',
+          'Keep oncoming traffic away from the collision zone'
+        ]
+      },
+      confidence: 97,
+    };
+  }
+  if (isSevereFire) {
+    return {
+      severity: 'CRITICAL',
+      priority: 'P1',
+      urgency: 'immediate',
+      people_at_risk: 2,
+      hazards: ['Active fire spread', 'Smoke inhalation', 'Structural compromise'],
+      response_domains: ['fire', 'medical', 'police'],
+      recommended_resource_types: ['fire_truck', 'ambulance', 'police_unit'],
+      summary: 'Active structure fire requiring suppression teams, perimeter security, and standby emergency medical support.',
+      responder_guidance: {
+        fire: [
+          'Initiate primary search and interior suppression attack',
+          'Connect to nearest hydrants and monitor structural integrity'
+        ],
+        medical: [
+          'Prepare high-flow oxygen and smoke inhalation triage kits'
+        ],
+        police: [
+          'Evacuate adjacent buildings and clear street for ladder trucks'
+        ]
+      },
+      pre_arrival_guidance: {
+        citizen: [
+          'Evacuate building immediately and close doors behind you to slow fire',
+          'Do not use elevators; crawl low under smoke',
+          'Assemble at designated outdoor safety area'
+        ]
+      },
+      confidence: 95,
+    };
+  }
+
+  const domainMap: Record<string, string[]> = {
+    crime: ['police'],
+    fire: ['fire'],
+    accident: ['accident', 'police'],
+    medical: ['medical'],
+    disaster: ['disaster'],
+    other: ['police', 'medical'],
+  };
+
+  return {
+    severity: 'HIGH',
+    priority: 'P2',
+    urgency: 'urgent',
+    people_at_risk: 1,
+    hazards: ['Unsecured emergency area'],
+    response_domains: domainMap[cat] ?? ['police'],
+    recommended_resource_types: ['police_unit', 'ambulance'],
+    summary: `${cat.toUpperCase()} emergency reported. Dispatching first responders for assessment.`,
+    responder_guidance: {
+      [cat]: [
+        'Proceed with standard response protocol',
+        'Verify scene safety and establish local command'
+      ]
+    },
+    pre_arrival_guidance: {
+      citizen: [
+        'Remain calm and stay in a safe, visible position',
+        'Follow instructions from responding emergency units upon arrival'
+      ]
+    },
+    confidence: 88,
+  };
+}
+
+/**
+ * Server-side proxy middleware for Featherless AI Context Analysis.
+ * Runs strictly within the Node / Vite server process and never exposes API keys to client JavaScript.
+ */
+function featherlessServerProxy(env: Record<string, string>): Plugin {
+  return {
+    name: 'featherless-server-proxy',
+    configureServer(server) {
+      server.middlewares.use('/api/analyze-incident', async (req, res) => {
+        if (req.method !== 'POST') {
+          res.statusCode = 405;
+          res.end(JSON.stringify({ error: 'Method not allowed' }));
+          return;
+        }
+
+        let bodyRaw = '';
+        req.on('data', chunk => { bodyRaw += chunk; });
+        req.on('end', async () => {
+          res.setHeader('Content-Type', 'application/json');
+          try {
+            const body = JSON.parse(bodyRaw || '{}');
+            const { category, description, latitude, longitude, eta_minutes } = body;
+
+            const apiKey = env.FEATHERLESS_API_KEY || process.env.FEATHERLESS_API_KEY || env.VITE_FEATHERLESS_API_KEY || process.env.VITE_FEATHERLESS_API_KEY || '';
+            let model = env.FEATHERLESS_MODEL || process.env.FEATHERLESS_MODEL || 'deepseek-ai/DeepSeek-V3.2';
+
+            const targetEndpoint = 'https://api.featherless.ai/v1/chat/completions';
+            const providerName = 'Featherless.ai (Official Hackathon Endpoint)';
+
+            console.log('\n======================================================');
+            console.log(`🤖 [AI BACKEND PROXY] Emergency Context Analysis (${providerName})`);
+            console.log(`📍 Category: ${category}`);
+            console.log(`📝 Description: ${description}`);
+            console.log(`🎯 Target API: ${targetEndpoint}`);
+            console.log(`🧠 Model: ${model}`);
+            console.log(`🔑 Key Configured: ${apiKey ? `YES (length: ${apiKey.length})` : 'NO (Missing)'}`);
+
+            if (!apiKey) {
+              console.warn('⚠️ [AI BACKEND PROXY] No API key configured. Returning deterministic fallback.');
+              console.log('======================================================\n');
+              const fallback = getDeterministicFallbackConfig(category, description, eta_minutes);
+              res.statusCode = 200;
+              res.end(JSON.stringify({
+                ...fallback,
+                source: 'deterministic_fallback',
+                modelUsed: 'rule_engine',
+                httpStatus: 0,
+                apiReachable: false,
+                reason: 'API key not configured in environment',
+              }));
+              return;
+            }
+
+            const promptUserContent = `Incident Category: ${category}
+Citizen Description: ${description || 'No detailed text provided.'}
+Location Coordinates: ${latitude ?? 40.7128}, ${longitude ?? -74.0060}
+${eta_minutes ? `Estimated Response ETA: ${eta_minutes} minutes` : ''}`;
+
+            const SYSTEM_PROMPT = `You are the emergency context analysis engine for ResQ.
+The citizen-selected incident category is authoritative. NEVER change the category.
+
+Analyze the provided incident context and determine:
+- severity: "CRITICAL" | "HIGH" | "MODERATE" | "LOW"
+- priority: "P1" | "P2" | "P3" | "P4"
+- urgency: "immediate" | "urgent" | "soon" | "routine"
+- people_at_risk: integer number
+- hazards: array of concise hazard strings
+- response_domains: array of domains needing dispatch, subset of ["police", "medical", "fire", "accident", "disaster"]
+- recommended_resource_types: array of specific unit strings (e.g. "police_unit", "ambulance", "fire_truck", "rescue_unit")
+- summary: concise operational summary (1-2 sentences)
+- responder_guidance: object with keys for each response domain containing 2-3 concise preparation bullets
+- pre_arrival_guidance: object with { "citizen": ["2-3 safe pre-arrival safety actions while waiting for help"] }
+
+Return ONLY valid JSON.`;
+
+            const featherlessRes = await fetch(targetEndpoint, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${apiKey.trim()}`,
+              },
+              body: JSON.stringify({
+                model,
+                messages: [
+                  { role: 'system', content: SYSTEM_PROMPT },
+                  { role: 'user', content: promptUserContent },
+                ],
+                temperature: 0.1,
+                max_tokens: 600,
+              }),
+            });
+
+            console.log(`📡 [FEATHERLESS BACKEND PROXY] Featherless HTTP Response Status: ${featherlessRes.status} ${featherlessRes.statusText}`);
+
+            if (!featherlessRes.ok) {
+              const errBody = await featherlessRes.text();
+              console.error(`❌ [FEATHERLESS BACKEND PROXY] Error payload:`, errBody);
+              console.log('======================================================\n');
+              const fallback = getDeterministicFallbackConfig(category, description, eta_minutes);
+              res.statusCode = 200;
+              res.end(JSON.stringify({
+                ...fallback,
+                source: 'deterministic_fallback',
+                modelUsed: model,
+                httpStatus: featherlessRes.status,
+                apiReachable: true,
+                reason: `Featherless HTTP error: ${featherlessRes.status}`,
+              }));
+              return;
+            }
+
+            const data = await featherlessRes.json();
+            const rawContent = data.choices?.[0]?.message?.content || '';
+            console.log(`✅ [FEATHERLESS BACKEND PROXY] Live LLM Output:\n${rawContent}`);
+            console.log('======================================================\n');
+
+            const cleaned = rawContent
+              .replace(/^```json\s*/i, '')
+              .replace(/^```\s*/i, '')
+              .replace(/```\s*$/i, '')
+              .trim();
+
+            try {
+              const parsed = JSON.parse(cleaned);
+              res.statusCode = 200;
+              res.end(JSON.stringify({
+                ...parsed,
+                source: 'featherless_live',
+                modelUsed: model,
+                httpStatus: featherlessRes.status,
+                apiReachable: true,
+              }));
+            } catch (pErr) {
+              console.error('[FEATHERLESS BACKEND PROXY] JSON parse error:', pErr);
+              const fallback = getDeterministicFallbackConfig(category, description, eta_minutes);
+              res.statusCode = 200;
+              res.end(JSON.stringify({
+                ...fallback,
+                source: 'deterministic_fallback',
+                modelUsed: model,
+                httpStatus: featherlessRes.status,
+                apiReachable: true,
+                reason: 'Failed to parse JSON response from Featherless model',
+              }));
+            }
+          } catch (err) {
+            console.error('[FEATHERLESS BACKEND PROXY] Server error:', err);
+            res.statusCode = 500;
+            res.end(JSON.stringify({ error: (err as Error).message }));
+          }
+        });
+      });
+    },
+  };
+}
+

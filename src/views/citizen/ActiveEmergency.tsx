@@ -213,39 +213,70 @@ export default function ActiveEmergency() {
           </div>
         </div>
 
-        {/* Safety Tips */}
+        {/* While Help Is Coming — AI Pre-Arrival Guidance */}
         {inc.status !== 'resolved' && (
-          <div className="rounded-2xl p-4 transition-colors" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border-subtle)' }}>
-            <div className="font-mono text-xs font-bold mb-2 uppercase tracking-wider" style={{ color: 'var(--text-dim)' }}>SAFETY GUIDANCE</div>
-            <div className="space-y-1.5 text-sm" style={{ color: 'var(--text-secondary)' }}>
-              {inc.category === 'crime' && (
-                <>
-                  <div>• Move away from the threat if safe to do so</div>
-                  <div>• Do not confront the attacker</div>
-                  <div>• Stay on the line — help is coming</div>
-                  <div>• Apply pressure to any bleeding wounds</div>
-                </>
+          <div className="rounded-2xl p-4 transition-colors" style={{ background: isDark ? '#0f172a' : '#f8fafc', border: '1px solid var(--border-subtle)', boxShadow: 'var(--shadow-elevation)' }}>
+            <div className="flex items-center justify-between mb-2.5">
+              <div className="flex items-center gap-2">
+                <span className="text-base">🛡️</span>
+                <span className="font-mono text-xs font-bold uppercase tracking-wider" style={{ color: 'var(--text-primary)' }}>
+                  WHILE HELP IS COMING — PRE-ARRIVAL BRIEFING
+                </span>
+              </div>
+              {inc.aiAnalysis?.source === 'featherless_live' && (
+                <span className="font-mono text-[10px] px-2 py-0.5 rounded-full font-bold" style={{ background: '#22c55e22', color: '#16a34a', border: '1px solid #22c55e44' }}>
+                  AI CONTEXT AWARE
+                </span>
               )}
-              {inc.category === 'fire' && (
+            </div>
+
+            {inc.etaMinutes ? (
+              <div className="mb-3 px-3 py-2 rounded-xl text-xs font-semibold flex items-center gap-2" style={{ background: isDark ? '#1e293b' : '#e0f2fe', color: '#0284c7' }}>
+                <span>⏱</span>
+                <span>First responders arriving in approximately {inc.etaMinutes} minutes. Follow safety preparations below:</span>
+              </div>
+            ) : null}
+
+            <div className="space-y-2 text-sm" style={{ color: 'var(--text-secondary)' }}>
+              {inc.aiAnalysis?.preArrivalGuidance?.citizen && inc.aiAnalysis.preArrivalGuidance.citizen.length > 0 ? (
+                inc.aiAnalysis.preArrivalGuidance.citizen.map((action, idx) => (
+                  <div key={idx} className="flex items-start gap-2">
+                    <span className="font-bold" style={{ color: '#ef4444' }}>•</span>
+                    <span>{action}</span>
+                  </div>
+                ))
+              ) : (
                 <>
-                  <div>• Evacuate the building immediately</div>
-                  <div>• Do not use elevators</div>
-                  <div>• Close doors to slow fire spread</div>
-                  <div>• Stay low if there is smoke</div>
-                </>
-              )}
-              {inc.category === 'accident' && (
-                <>
-                  <div>• Do not move injured persons unless in danger</div>
-                  <div>• Turn off vehicle engines if safe to do so</div>
-                  <div>• Keep the scene clear for responders</div>
-                </>
-              )}
-              {!['crime', 'fire', 'accident'].includes(inc.category) && (
-                <>
-                  <div>• Stay calm and remain in a safe location</div>
-                  <div>• Follow any instructions from emergency services</div>
-                  <div>• Help is on the way</div>
+                  {inc.category === 'crime' && (
+                    <>
+                      <div>• Move away from the threat if safe to do so</div>
+                      <div>• Do not confront the attacker</div>
+                      <div>• Stay in a secure location — help is coming</div>
+                      <div>• Apply pressure to any bleeding wounds with clean cloth</div>
+                    </>
+                  )}
+                  {inc.category === 'fire' && (
+                    <>
+                      <div>• Evacuate the building immediately</div>
+                      <div>• Do not use elevators</div>
+                      <div>• Close doors behind you to slow fire spread</div>
+                      <div>• Stay low if there is smoke</div>
+                    </>
+                  )}
+                  {inc.category === 'accident' && (
+                    <>
+                      <div>• Do not move injured persons unless in immediate danger</div>
+                      <div>• Turn off vehicle engines if safe to do so</div>
+                      <div>• Keep the scene clear for emergency vehicles</div>
+                    </>
+                  )}
+                  {!['crime', 'fire', 'accident'].includes(inc.category) && (
+                    <>
+                      <div>• Stay calm and remain in a safe, visible position</div>
+                      <div>• Follow instructions from emergency services upon arrival</div>
+                      <div>• Keep communication lines clear</div>
+                    </>
+                  )}
                 </>
               )}
             </div>

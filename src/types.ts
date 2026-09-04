@@ -61,6 +61,14 @@ export interface AIAnalysis {
   requiredDomains: Domain[];
   confidence: number;
   recommendedResourceIds: string[];
+  summary?: string;
+  responderGuidance?: Record<string, string[]>;
+  preArrivalGuidance?: {
+    citizen?: string[];
+  };
+  source?: 'featherless_live' | 'deterministic_fallback';
+  modelUsed?: string;
+  httpStatus?: number;
 }
 
 export interface TimelineEvent {

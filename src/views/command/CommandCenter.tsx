@@ -3,7 +3,7 @@ import { useApp } from '../../context/AppContext';
 import LiveMap from '../../components/LiveMap';
 import {
   KPICard, PriorityBadge, StatusBadge, ResourceStatusBadge, SectionLabel,
-  CATEGORY_META, DOMAIN_META,
+  CATEGORY_META, DOMAIN_META, getCategoryMeta, getDomainMeta,
 } from '../../components/Shared';
 import type { Incident } from '../../types';
 import IncidentDetail from '../responder/IncidentDetail';
@@ -29,7 +29,7 @@ const NAV_ITEMS = [
 ];
 
 function IncidentRow({ incident, onClick }: { incident: Incident; onClick: () => void }) {
-  const catMeta = CATEGORY_META[incident.category];
+  const catMeta = getCategoryMeta(incident.category);
   return (
     <button onClick={onClick} className="w-full text-left px-4 py-3 flex items-center gap-3 transition-all hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer"
       style={{ background: 'var(--bg-card)', borderBottom: '1px solid var(--border-subtle)' }}>
@@ -43,11 +43,14 @@ function IncidentRow({ incident, onClick }: { incident: Incident; onClick: () =>
           {incident.location.label}
         </div>
         <div className="flex gap-1 mt-1">
-          {incident.affectedDomains.map(d => (
-            <span key={d} className="font-mono text-xs" style={{ color: DOMAIN_META[d].color }}>
-              {DOMAIN_META[d].emoji}
-            </span>
-          ))}
+          {incident.affectedDomains.map(d => {
+            const dm = getDomainMeta(d);
+            return (
+              <span key={d} className="font-mono text-xs" style={{ color: dm.color }}>
+                {dm.emoji}
+              </span>
+            );
+          })}
         </div>
       </div>
       <div className="text-right flex-shrink-0">
@@ -295,14 +298,17 @@ export default function CommandCenter() {
                             onClick={() => setSelectedIncidentId(inc.id)}>
                             {inc.incidentNumber}
                           </button>
-                          {(['fire', 'medical', 'police', 'accident', 'disaster'] as const).map(d => (
-                            <div key={d} style={{
-                              color: inc.affectedDomains.includes(d) ? DOMAIN_META[d].color : 'var(--text-dim)',
-                              fontWeight: inc.affectedDomains.includes(d) ? 'bold' : 'normal',
-                            }}>
-                              {inc.affectedDomains.includes(d) ? '✓' : '—'}
-                            </div>
-                          ))}
+                          {(['fire', 'medical', 'police', 'accident', 'disaster'] as const).map(d => {
+                            const dm = getDomainMeta(d);
+                            return (
+                              <div key={d} style={{
+                                color: inc.affectedDomains.includes(d) ? dm.color : 'var(--text-dim)',
+                                fontWeight: inc.affectedDomains.includes(d) ? 'bold' : 'normal',
+                              }}>
+                                {inc.affectedDomains.includes(d) ? '✓' : '—'}
+                              </div>
+                            );
+                          })}
                         </div>
                       ))}
                     </div>
@@ -347,7 +353,7 @@ export default function CommandCenter() {
                           }}>
                           <div className="flex items-start justify-between mb-3">
                             <div className="flex items-center gap-2">
-                              <span className="text-2xl">{CATEGORY_META[inc.category].emoji}</span>
+                              <span className="text-2xl">{getCategoryMeta(inc.category).emoji}</span>
                               <div>
                                 <div className="font-display text-lg font-bold" style={{ color: '#ef4444' }}>
                                   {inc.incidentNumber} — P1 CRITICAL
@@ -446,7 +452,7 @@ export default function CommandCenter() {
                       <SectionLabel>Incident Volume by Category</SectionLabel>
                       {['fire', 'medical', 'accident', 'crime', 'disaster'].map((cat, i) => {
                         const vals = [8, 14, 11, 7, 2];
-                        const catMeta = CATEGORY_META[cat as keyof typeof CATEGORY_META];
+                        const catMeta = getCategoryMeta(cat);
                         return (
                           <div key={cat} className="flex items-center gap-3 mb-3">
                             <span className="w-5 text-base">{catMeta.emoji}</span>

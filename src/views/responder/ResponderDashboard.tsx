@@ -6,6 +6,7 @@ import LiveMap from '../../components/LiveMap';
 import {
   KPICard, PriorityBadge, StatusBadge, ResourceStatusBadge,
   SectionLabel, CATEGORY_META, DOMAIN_META, RESOURCE_STATUS_META,
+  getDomainMeta, getCategoryMeta,
 } from '../../components/Shared';
 import type { Incident, Resource, Domain } from '../../types';
 
@@ -35,7 +36,7 @@ function IncidentCard({ incident, onClick, highlight = false }: {
 }) {
   const { theme } = useApp();
   const isDark = theme === 'dark';
-  const cat = CATEGORY_META[incident.category];
+  const cat = getCategoryMeta(incident.category);
   const borderColor = highlight ? '#ef4444' : incident.priority === 'P1' ? '#ef444466' : 'var(--border-subtle)';
 
   return (
@@ -88,12 +89,15 @@ function IncidentCard({ incident, onClick, highlight = false }: {
       {/* Domains + status */}
       <div className="flex items-center justify-between pt-2" style={{ borderTop: '1px solid var(--border-subtle)' }}>
         <div className="flex gap-1 flex-wrap">
-          {incident.affectedDomains.map(d => (
-            <span key={d} className="text-xs px-1.5 py-0.5 rounded font-mono font-semibold"
-              style={{ background: `${DOMAIN_META[d].color}22`, color: DOMAIN_META[d].color, border: `1px solid ${DOMAIN_META[d].color}44` }}>
-              {DOMAIN_META[d].emoji} {d}
-            </span>
-          ))}
+          {incident.affectedDomains.map(d => {
+            const dm = getDomainMeta(d);
+            return (
+              <span key={d} className="text-xs px-1.5 py-0.5 rounded font-mono font-semibold"
+                style={{ background: `${dm.color}22`, color: dm.color, border: `1px solid ${dm.color}44` }}>
+                {dm.emoji} {d}
+              </span>
+            );
+          })}
         </div>
         {highlight && (
           <span className="font-mono text-xs font-bold animate-blink" style={{ color: '#eab308' }}>⚠ NEEDS APPROVAL</span>
@@ -208,7 +212,7 @@ function ApprovalBanner({ incident, onApprove, onView }: { incident: Incident; o
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4 font-mono text-xs">
         <div style={{ color: 'var(--text-secondary)' }}>
           <div style={{ color: 'var(--text-muted)' }}>CATEGORY</div>
-          {CATEGORY_META[incident.category].emoji} {incident.category.toUpperCase()}
+          {getCategoryMeta(incident.category).emoji} {incident.category.toUpperCase()}
         </div>
         <div style={{ color: incident.aiAnalysis?.severity === 'CRITICAL' ? '#ef4444' : '#f97316' }}>
           <div style={{ color: 'var(--text-muted)' }}>SEVERITY</div>
@@ -292,7 +296,7 @@ export default function ResponderDashboard() {
                 </button>
                 <div className="flex-1">
                   <div className="font-display text-xl font-bold" style={{ color: 'var(--text-primary)' }}>
-                    {CATEGORY_META[inc.category].emoji} {inc.incidentNumber} — Operational Report
+                    {getCategoryMeta(inc.category).emoji} {inc.incidentNumber} — Operational Report
                   </div>
                 </div>
                 <PriorityBadge priority={inc.priority} />
