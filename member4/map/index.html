@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1.0">
+
+    <title>RESQ Emergency Map</title>
+
+    <link
+        rel="stylesheet"
+        href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    >
+
+    <link
+        rel="stylesheet"
+        href="style.css"
+    >
+</head>
+
+<body>
+
+    <header>
+
+        <h1>RESQ Emergency Map</h1>
+
+        <p>
+            View incident location and emergency vehicles
+        </p>
+
+        <button id="locateButton">
+            Get Incident Location
+        </button>
+
+        <div id="status">
+            Incident location not identified yet.
+        </div>
+
+    </header>
+
+
+    <div id="map"></div>
+
+
+    <!-- Incident and Resource Information -->
+
+    <div id="infoPanel">
+
+        <h2>Emergency Information</h2>
+
+        <div id="incidentInfo">
+
+            <p>
+                <b>📍 Incident Location</b>
+            </p>
+
+            <p>
+                Location not identified yet.
+            </p>
+
+        </div>
+
+
+        <div id="resourceInfo">
+
+            <h3>
+                Nearest Available Resources
+            </h3>
+
+            <p>
+                Waiting for incident location...
+            </p>
+
+        </div>
+
+    </div>
+
+
+    <!-- Map Legend -->
+
+    <div class="legend">
+
+        <h3>Map Legend</h3>
+
+        <div>📍 Incident Location</div>
+
+        <div>🚑 Ambulance</div>
+
+        <div>🚓 Police</div>
+
+        <div>🚒 Fire Vehicle</div>
+
+    </div>
+
+
+    <script
+        src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js">
+    </script>
+
+    <script src="map.js"></script>
+
+</body>
+
+</html>
