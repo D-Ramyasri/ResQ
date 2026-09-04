@@ -35,6 +35,15 @@ import {
   getRequirementsFromAI,
 } from '../utils/resourceEngine';
 
+import {
+  fetchResources,
+  fetchIncidents,
+  createBackendIncident,
+  assignBackendResource,
+  updateBackendIncidentStatus,
+  updateBackendResourceStatus,
+} from '../api';
+
 export type View =
   | 'login'
   | 'citizen_dashboard'
@@ -91,6 +100,8 @@ type Action =
       type: 'UPDATE_RESOURCE';
       payload: { id: string; changes: Partial<Resource> };
     }
+  | { type: 'SET_RESOURCES'; payload: Resource[] }
+  | { type: 'SET_INCIDENTS'; payload: Incident[] }
   | { type: 'ADD_NOTIFICATION'; payload: Notification }
   | { type: 'MARK_NOTIFICATION_READ'; payload: string }
   | { type: 'ADD_AI_ALERT'; payload: AIAlert }
@@ -137,6 +148,182 @@ const getInitialTheme = (): 'dark' | 'light' => {
 
   return 'dark';
 };
+
+interface BackendIncidentRecord {
+  id: number;
+  description: string;
+  latitude: number;
+  longitude: number;
+  status: string;
+  priority: string;
+  created_at: string;
+}
+
+function mapBackendIncident(
+  backend: BackendIncidentRecord
+): Incident {
+  const description = backend.description || 'Emergency reported via RESQ platform.';
+  const lowerDescription = description.toLowerCase();
+
+  let category: IncidentCategory = 'other';
+  if (lowerDescription.includes('fire')) {
+    category = 'fire';
+  } else if (
+    lowerDescription.includes('accident') ||
+    lowerDescription.includes('crash')
+  ) {
+    category = 'accident';
+  } else if (
+    lowerDescription.includes('police') ||
+    lowerDescription.includes('crime') ||
+    lowerDescription.includes('attack')
+  ) {
+    category = 'crime';
+  } else if (
+    lowerDescription.includes('medical') ||
+    lowerDescription.includes('injur') ||
+    lowerDescription.includes('ambulance')
+  ) {
+    category = 'medical';
+  } else if (
+    lowerDescription.includes('disaster') ||
+    lowerDescription.includes('flood') ||
+    lowerDescription.includes('earthquake')
+  ) {
+    category = 'disaster';
+  }
+
+  const priority =
+    backend.priority?.toLowerCase() === 'high'
+      ? 'P1'
+      : backend.priority?.toLowerCase() === 'medium'
+        ? 'P2'
+        : backend.priority?.toLowerCase() === 'low'
+          ? 'P3'
+          : 'P2';
+
+  const severity =
+    priority === 'P1' ? 'CRITICAL' :
+    priority === 'P2' ? 'HIGH' :
+    priority === 'P3' ? 'MODERATE' :
+    'LOW';
+
+  const affectedDomains: Domain[] =
+    category === 'fire'
+      ? ['fire', 'medical', 'police']
+      : category === 'accident'
+        ? ['accident', 'medical', 'fire', 'police']
+        : category === 'crime'
+          ? ['police', 'medical']
+          : category === 'medical'
+            ? ['medical']
+            : category === 'disaster'
+              ? ['disaster', 'medical', 'police', 'fire']
+              : ['police', 'medical'];
+
+  const requiredResources =
+    category === 'fire'
+      ? ['2× Fire Truck', '1× Ambulance (precautionary)']
+      : category === 'accident'
+        ? ['1× Police Unit', '1× Fire/Rescue', '1× Ambulance']
+        : category === 'crime'
+          ? ['2× Police Unit', '1× Ambulance (ALS)']
+          : category === 'medical'
+            ? ['1× Ambulance (ALS)']
+            : category === 'disaster'
+              ? ['2× Rescue Team', '1× Medical Unit']
+              : ['1× Ambulance (ALS)'];
+
+  const backendStatus = backend.status?.toLowerCase();
+  const status: IncidentStatus =
+    backendStatus === 'assigned'
+      ? 'assigned'
+      : backendStatus === 'resolved'
+        ? 'resolved'
+        : backendStatus === 'en_route'
+          ? 'en_route'
+          : backendStatus === 'arrived'
+            ? 'arrived'
+            : 'awaiting_approval';
+
+  const createdAt = new Date(backend.created_at);
+  const frontendId = `db-inc-${backend.id}`;
+  const incidentNumber = `#DB-INC-${backend.id}`;
+
+  return {
+    id: frontendId,
+    incidentNumber,
+    category,
+    status,
+    priority,
+    severity,
+    location: {
+      x: backend.longitude,
+      y: backend.latitude,
+      lat: backend.latitude,
+      lng: backend.longitude,
+      label: `${backend.latitude.toFixed(4)}, ${backend.longitude.toFixed(4)}`,
+      isLiveGps: true,
+      confirmed: true,
+    },
+    reports: [
+      {
+        id: `db-rep-${backend.id}`,
+        citizenId: 'backend',
+        citizenName: 'RESQ Backend',
+        category,
+        description,
+        location: {
+          x: backend.longitude,
+          y: backend.latitude,
+          lat: backend.latitude,
+          lng: backend.longitude,
+          label: `${backend.latitude.toFixed(4)}, ${backend.longitude.toFixed(4)}`,
+          isLiveGps: true,
+          confirmed: true,
+        },
+        timestamp: createdAt,
+        hasImage: false,
+        hasVoice: false,
+        voiceDuration: 0,
+        imageUrl: '',
+      },
+    ],
+    aiAnalysis: {
+      severity,
+      priority,
+      peopleAtRisk: category === 'fire' ? 3 : 1,
+      injuries:
+        category === 'fire'
+          ? 'Possible smoke inhalation and trapped occupants'
+          : 'Assessment based on backend incident report',
+      hazards:
+        category === 'fire'
+          ? ['Fire spread', 'Smoke inhalation', 'Structural instability']
+          : ['Incident hazard'],
+      urgency:
+        priority === 'P1'
+          ? 'Immediate — respond within 3 minutes'
+          : 'Prompt response required',
+      requiredResources,
+      requiredDomains: affectedDomains,
+      confidence: 95,
+      recommendedResourceIds: [],
+    },
+    assignedResourceIds: [],
+    affectedDomains,
+    timeline: [
+      {
+        id: `db-timeline-${backend.id}`,
+        timestamp: createdAt,
+        event: 'Incident loaded from PostgreSQL backend',
+        type: 'system',
+      },
+    ],
+    createdAt,
+    updatedAt: createdAt,
+  };
+}
 
 const initialState: AppState = {
   theme: getInitialTheme(),
@@ -238,6 +425,18 @@ function reducer(state: AppState, action: Action): AppState {
               }
             : resource
         ),
+      };
+
+    case 'SET_RESOURCES':
+      return {
+        ...state,
+        resources: action.payload,
+      };
+
+    case 'SET_INCIDENTS':
+      return {
+        ...state,
+        incidents: action.payload,
       };
 
     case 'ADD_NOTIFICATION':
@@ -399,6 +598,18 @@ export function AppProvider({
     ReturnType<typeof setTimeout>[]
   >([]);
 
+  // Maps the frontend incident ID (inc-1043, etc.)
+  // to the PostgreSQL incident ID.
+  const backendIncidentIdsRef = useRef<
+    Map<string, number>
+  >(new Map());
+
+  // Keeps the in-flight backend creation promise so
+  // approval cannot accidentally create a duplicate incident.
+  const backendIncidentPromisesRef = useRef<
+    Map<string, Promise<number>>
+  >(new Map());
+
   useEffect(() => {
     document.documentElement.setAttribute(
       'data-theme',
@@ -421,6 +632,89 @@ export function AppProvider({
       );
     } catch {}
   }, [state.theme]);
+
+  // Load resources from the FastAPI backend
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadResources = async () => {
+      try {
+        const backendResources = await fetchResources();
+
+        if (!cancelled && backendResources.length > 0) {
+          dispatch({
+            type: 'SET_RESOURCES',
+            payload: backendResources,
+          });
+        }
+      } catch (error) {
+        console.error(
+          'Failed to load resources from backend:',
+          error
+        );
+      }
+    };
+
+    loadResources();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Load incidents from the FastAPI backend while preserving
+  // the existing demo incidents used by the dashboard.
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadIncidents = async () => {
+      try {
+        const backendIncidents = await fetchIncidents();
+
+        if (cancelled) {
+          return;
+        }
+
+        const mappedIncidents = backendIncidents.map(
+          mapBackendIncident
+        );
+
+        mappedIncidents.forEach(incident => {
+          const match = /db-inc-(\d+)/.exec(incident.id);
+          if (match) {
+            backendIncidentIdsRef.current.set(
+              incident.id,
+              Number(match[1])
+            );
+          }
+        });
+
+        const existingDemoIncidents =
+          state.incidents.filter(
+            incident => !incident.id.startsWith('db-inc-')
+          );
+
+        dispatch({
+          type: 'SET_INCIDENTS',
+          payload: [
+            ...existingDemoIncidents,
+            ...mappedIncidents,
+          ],
+        });
+      } catch (error) {
+        console.error(
+          'Failed to load incidents from backend:',
+          error
+        );
+      }
+    };
+
+    loadIncidents();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const toggleTheme = useCallback(() => {
     dispatch({
@@ -855,6 +1149,72 @@ export function AppProvider({
       payload: 'citizen_processing',
     });
 
+    /*
+     * BACKEND INTEGRATION
+     *
+     * Save the incident in PostgreSQL while the existing
+     * frontend/AI processing flow continues normally.
+     *
+     * Real GPS coordinates are used when available.
+     * The fallback coordinates are Hyderabad coordinates so
+     * demo-only x/y map positions are not stored as latitude/longitude.
+     */
+    const backendLatitude =
+      location.lat ?? 17.3850;
+    const backendLongitude =
+      location.lng ?? 78.4867;
+
+    const backendPriority =
+      priorityMap[category] === 'P1'
+        ? 'high'
+        : 'medium';
+
+    const backendIncidentPromise =
+      createBackendIncident(
+        draft.description ||
+          'Emergency reported via RESQ platform.',
+        backendLatitude,
+        backendLongitude,
+        backendPriority
+      )
+        .then(backendIncident => {
+          backendIncidentIdsRef.current.set(
+            incidentId,
+            backendIncident.id
+          );
+
+          return backendIncident.id;
+        })
+        .catch(error => {
+          console.error(
+            'Failed to save incident to backend:',
+            error
+          );
+          addToast(
+            '⚠ Incident created locally, but could not be saved to PostgreSQL.',
+            'warning'
+          );
+          throw error;
+        });
+
+    backendIncidentPromisesRef.current.set(
+      incidentId,
+      backendIncidentPromise
+    );
+
+    backendIncidentPromise.then(
+      () => {
+        backendIncidentPromisesRef.current.delete(
+          incidentId
+        );
+      },
+      () => {
+        backendIncidentPromisesRef.current.delete(
+          incidentId
+        );
+      }
+    );
+
     affectedDomains.forEach(
       (domain, i) => {
         const roleMap: Record<
@@ -944,6 +1304,7 @@ export function AppProvider({
   }, [
     state.reportDraft,
     state.currentUser,
+    addToast,
   ]);
 
   /*
@@ -1070,6 +1431,88 @@ export function AppProvider({
       }
 
       /*
+       * BACKEND PERSISTENCE
+       *
+       * Member 4 decides WHICH resources to assign.
+       * FastAPI/PostgreSQL records that decision.
+       */
+      const persistAssignment = async () => {
+        try {
+          let backendIncidentId =
+            backendIncidentIdsRef.current.get(
+              incidentId
+            );
+
+          if (!backendIncidentId) {
+            const pendingPromise =
+              backendIncidentPromisesRef.current.get(
+                incidentId
+              );
+
+            if (pendingPromise) {
+              backendIncidentId =
+                await pendingPromise;
+            } else {
+              const backendLatitude =
+                inc.location.lat ?? 17.3850;
+              const backendLongitude =
+                inc.location.lng ?? 78.4867;
+
+              const created =
+                await createBackendIncident(
+                  inc.reports[0]?.description ??
+                    'Emergency reported via RESQ platform.',
+                  backendLatitude,
+                  backendLongitude,
+                  inc.priority === 'P1'
+                    ? 'high'
+                    : 'medium'
+                );
+
+              backendIncidentId =
+                created.id;
+
+              backendIncidentIdsRef.current.set(
+                incidentId,
+                backendIncidentId
+              );
+            }
+          }
+
+          await updateBackendIncidentStatus(
+            String(backendIncidentId),
+            'assigned'
+          );
+
+          const backendResourceIds =
+            resourceIds.filter(resourceId =>
+              /^\d+$/.test(resourceId)
+            );
+
+          await Promise.all(
+            backendResourceIds.map(resourceId =>
+              assignBackendResource(
+                String(backendIncidentId),
+                resourceId
+              )
+            )
+          );
+        } catch (error) {
+          console.error(
+            'Failed to persist assignment to backend:',
+            error
+          );
+
+          addToast(
+            '⚠ Frontend allocation succeeded, but backend assignment could not be saved.',
+            'warning'
+          );
+        }
+      };
+
+      void persistAssignment();
+
+      /*
        * Inform the command system if some requested
        * resources were unavailable.
        */
@@ -1135,6 +1578,39 @@ export function AppProvider({
             });
           }
         );
+
+        const backendIncidentId =
+          backendIncidentIdsRef.current.get(
+            incidentId
+          );
+
+        if (backendIncidentId) {
+          void updateBackendIncidentStatus(
+            String(backendIncidentId),
+            'en_route'
+          ).catch(error =>
+            console.error(
+              'Failed to update backend incident status:',
+              error
+            )
+          );
+
+          resourceIds
+            .filter(resourceId =>
+              /^\d+$/.test(resourceId)
+            )
+            .forEach(resourceId => {
+              void updateBackendResourceStatus(
+                resourceId,
+                'en_route'
+              ).catch(error =>
+                console.error(
+                  'Failed to update backend resource status:',
+                  error
+                )
+              );
+            });
+        }
 
         dispatch({
           type: 'ADD_AI_ALERT',
@@ -1207,6 +1683,39 @@ export function AppProvider({
           }
         );
 
+        const backendIncidentId =
+          backendIncidentIdsRef.current.get(
+            incidentId
+          );
+
+        if (backendIncidentId) {
+          void updateBackendIncidentStatus(
+            String(backendIncidentId),
+            'arrived'
+          ).catch(error =>
+            console.error(
+              'Failed to update backend incident status:',
+              error
+            )
+          );
+
+          resourceIds
+            .filter(resourceId =>
+              /^\d+$/.test(resourceId)
+            )
+            .forEach(resourceId => {
+              void updateBackendResourceStatus(
+                resourceId,
+                'arrived'
+              ).catch(error =>
+                console.error(
+                  'Failed to update backend resource status:',
+                  error
+                )
+              );
+            });
+        }
+
         addToast(
           `Responders arrived on scene — ${inc.incidentNumber}`,
           'info'
@@ -1255,6 +1764,39 @@ export function AppProvider({
             });
           }
         );
+
+        const backendIncidentId =
+          backendIncidentIdsRef.current.get(
+            incidentId
+          );
+
+        if (backendIncidentId) {
+          void updateBackendIncidentStatus(
+            String(backendIncidentId),
+            'resolved'
+          ).catch(error =>
+            console.error(
+              'Failed to update backend incident status:',
+              error
+            )
+          );
+
+          resourceIds
+            .filter(resourceId =>
+              /^\d+$/.test(resourceId)
+            )
+            .forEach(resourceId => {
+              void updateBackendResourceStatus(
+                resourceId,
+                'available'
+              ).catch(error =>
+                console.error(
+                  'Failed to update backend resource status:',
+                  error
+                )
+              );
+            });
+        }
 
         dispatch({
           type: 'ADD_AI_ALERT',
@@ -1730,10 +2272,27 @@ export function AppProvider({
       );
 
       setTimeout(() => {
-        const primaryId =
-          targetInc.aiAnalysis
-            ?.recommendedResourceIds?.[0] ??
-          'amb-a01';
+        /*
+         * Use the actual resource IDs currently loaded from PostgreSQL.
+         * The old demo used mock IDs such as "amb-a01", but backend
+         * resources use numeric IDs ("1", "2", ...).
+         */
+        const availableResources = state.resources.filter(
+          resource => resource.status === 'available'
+        );
+
+        const primaryResource =
+          availableResources[0];
+
+        if (!primaryResource) {
+          addToast(
+            '⚠ No available resource for reallocation demo',
+            'warning'
+          );
+          return;
+        }
+
+        const primaryId = primaryResource.id;
 
         dispatch({
           type: 'UPDATE_RESOURCE',
@@ -1744,6 +2303,16 @@ export function AppProvider({
             },
           },
         });
+
+        void updateBackendResourceStatus(
+          primaryId,
+          'busy'
+        ).catch(error =>
+          console.error(
+            'Failed to update backend resource status during reallocation demo:',
+            error
+          )
+        );
 
         dispatch({
           type: 'SET_REALLOCATION_DEMO',
@@ -1784,10 +2353,32 @@ export function AppProvider({
       }, 3000);
 
       setTimeout(() => {
-        const backupId =
-          targetInc.aiAnalysis
-            ?.recommendedResourceIds?.[1] ??
-          'amb-a02';
+        /*
+         * Pick a different currently available backend resource
+         * as the replacement. This keeps the reallocation demo
+         * compatible with PostgreSQL resource IDs.
+         */
+        const primaryId =
+          state.resources.find(
+            resource => resource.status === 'busy'
+          )?.id;
+
+        const backupResource =
+          state.resources.find(
+            resource =>
+              resource.status === 'available' &&
+              resource.id !== primaryId
+          );
+
+        if (!backupResource) {
+          addToast(
+            '⚠ No backup resource available for reallocation',
+            'warning'
+          );
+          return;
+        }
+
+        const backupId = backupResource.id;
 
         const updatedAI = {
           ...targetInc.aiAnalysis!,
@@ -1796,7 +2387,7 @@ export function AppProvider({
             ...(
               targetInc.aiAnalysis
                 ?.recommendedResourceIds
-                ?.slice(1) ?? []
+                ?.filter(id => id !== backupId) ?? []
             ),
           ],
         };
@@ -1833,7 +2424,7 @@ export function AppProvider({
         });
 
         addToast(
-          '✓ AI recommended new resource — awaiting manager approval',
+          `✓ AI recommended ${backupResource.name} as the replacement — awaiting manager approval`,
           'info'
         );
       }, 5000);
@@ -1851,6 +2442,7 @@ export function AppProvider({
     },
     [
       state.incidents,
+      state.resources,
       addToast,
     ]
   );
