@@ -1,590 +1,908 @@
-# ResQ
+# 🚨 RESQ --- Intelligent Emergency Response & Coordination Platform
 
-ResQ is an emergency response coordination platform for turning citizen reports into a shared operational incident. It gives citizens, domain managers, responders, and command staff a common view of an emergency, while using Featherless AI to analyze the report context and recommend a coordinated response.
+> **From a citizen's first report to coordinated emergency response ---
+> RESQ turns fragmented emergency information into one operational
+> picture.**
 
-The application is designed as a hackathon-ready operational demo. The frontend contains the complete interactive experience, the local FastAPI service provides PostgreSQL-backed incidents and resources, and a Supabase Edge Function keeps the Featherless API key on the server side.
+RESQ is an emergency-response coordination platform designed to help
+citizens, responders, resource managers, and command teams work from the
+same incident picture.
 
-> ResQ is a demonstration system, not a replacement for emergency services, dispatch protocols, or professional medical, fire, rescue, or law-enforcement guidance.
+Instead of treating an emergency report as an isolated message, RESQ
+combines **incident context analysis, multi-agency routing, incident
+fusion, proximity-aware resource allocation, live status tracking, and
+responder coordination** into a single workflow.
 
-## What ResQ Does
+------------------------------------------------------------------------
 
-A typical incident moves through this sequence:
+## 🎯 The Problem
 
-```text
-Citizen report
-    |
-    v
-Local incident created immediately
-    |
-    +--> FastAPI/PostgreSQL persistence
-    |
-    +--> Supabase Edge Function
-              |
-              v
-        Featherless AI analysis
-              |
-              v
-        Structured operational result
-              |
-              v
-Existing ResQ dashboards, routing, approval, dispatch, ETA, and status tracking
+Emergency response often becomes difficult not because information is
+unavailable, but because it is **fragmented, delayed, and difficult to
+coordinate**.
+
+A real incident may generate:
+
+-   multiple citizen reports about the same event
+-   incomplete or inconsistent descriptions
+-   several agencies that need to respond
+-   limited ambulances, fire trucks, police units, or rescue teams
+-   rapidly changing resource availability
+-   uncertainty about which unit should respond first
+
+A response platform therefore needs to answer more than:
+
+> **"What happened?"**
+
+It also needs to answer:
+
+> **"How serious is it, who needs to respond, which resources are
+> available, and which resources should be sent?"**
+
+------------------------------------------------------------------------
+
+## 💡 Our Solution
+
+RESQ creates a shared operational workflow:
+
+``` text
+Citizen Report
+      ↓
+Incident Context Analysis
+      ↓
+Severity + Priority + Hazards
+      ↓
+Multi-Agency Routing
+      ↓
+Resource Requirements
+      ↓
+Nearest Available Resource Matching
+      ↓
+Human Approval
+      ↓
+Dispatch / En Route / Arrived
+      ↓
+Incident Resolution
 ```
 
-The system supports:
+The key design principle is:
 
-- Citizen emergency reporting with category, description, location, image, and voice controls.
-- Fire, medical, police, accident, and disaster manager dashboards.
-- A system-wide Command Center.
-- Incident prioritization and AI analysis display.
-- Multi-domain routing, for example one crime incident reaching both police and medical managers.
-- Resource recommendations and manager approval before dispatch.
-- Resource status changes such as available, assigned, en route, arrived, and resolved.
-- Live map views for incidents, resources, hospitals, and responder movement.
-- Demo scenarios for crime plus medical response, multi-vehicle accidents, duplicate report fusion, and resource reallocation.
-- A deterministic ResQ analysis engine used only as a fallback when the Featherless request fails.
+> **AI provides incident context and resource requirements; the
+> deterministic resource engine decides which available units should
+> actually be allocated.**
 
-## Current Architecture
+This separation makes the response workflow easier to understand, test,
+and control.
+
+------------------------------------------------------------------------
+
+# ⭐ What Makes RESQ Different?
+
+### 1. Context-aware AI, not just incident classification
+
+RESQ sends the selected incident category, description, location, and
+ETA context to an AI analysis service.
+
+The AI produces structured operational context including:
+
+-   severity
+-   priority
+-   urgency
+-   people at risk
+-   hazards
+-   response domains
+-   recommended resource types
+-   concise incident summary
+-   responder guidance
+
+The AI response is validated against an explicit schema before being
+accepted.
+
+**Important:** AI does not directly assign database resources.
+
+------------------------------------------------------------------------
+
+### 2. AI + deterministic resource allocation
+
+This is one of RESQ's core design decisions.
+
+``` text
+AI
+ │
+ └── "2 fire trucks + 1 ambulance are required"
+                    ↓
+        Resource Allocation Engine
+                    ↓
+        "Which available units?"
+                    ↓
+        Nearest eligible resources
+```
+
+The allocation engine:
+
+1.  filters resources by availability
+2.  filters them by required resource type
+3.  calculates distance
+4.  sorts eligible resources by distance
+5.  selects the required number of units
+6.  reports any unfulfilled requirement
+
+This avoids making resource assignment depend entirely on an AI
+decision.
+
+------------------------------------------------------------------------
+
+### 3. Multi-agency coordination
+
+A single incident can involve multiple response domains.
+
+RESQ supports:
+
+-   🔥 Fire
+-   🚑 Medical
+-   👮 Police
+-   🚗 Accident response
+-   🌪️ Disaster response
+
+An incident can therefore be routed to multiple responsible teams
+instead of forcing emergency coordination into a single-agency workflow.
+
+------------------------------------------------------------------------
+
+### 4. Duplicate-report / incident fusion
+
+The platform includes an incident-fusion workflow for situations where
+several citizens report the same emergency.
+
+Instead of treating:
+
+``` text
+Report A
+Report B
+Report C
+```
+
+as three unrelated incidents, RESQ demonstrates how related reports can
+be consolidated into:
+
+``` text
+             ONE UNIFIED INCIDENT
+                     ↓
+              Better context
+                     ↓
+            Better prioritization
+                     ↓
+          Coordinated response
+```
+
+The demo timeline records the fusion and escalation process so command
+users can understand how the incident evolved.
+
+------------------------------------------------------------------------
+
+### 5. Proximity-aware allocation
+
+When multiple eligible resources exist, RESQ prefers the nearest
+available units.
+
+For example:
+
+``` text
+Incident
+   ●
+  / \
+ /   \
+🚑 A01   🚑 A04
+  1.2 km   3.4 km
+
+        ↓
+
+Select A01 first
+```
+
+This is particularly important in emergency response, where reducing
+unnecessary travel distance can improve response efficiency.
+
+------------------------------------------------------------------------
+
+### 6. Human-in-the-loop dispatch
+
+RESQ does not automatically turn an AI recommendation into an
+irreversible dispatch.
+
+The workflow includes an **approval stage**:
+
+``` text
+AI Analysis
+     ↓
+Recommended response
+     ↓
+Command / manager review
+     ↓
+Approve
+     ↓
+Resource allocation
+     ↓
+Dispatch
+```
+
+This keeps a responsible human decision-maker in the operational loop.
+
+------------------------------------------------------------------------
+
+### 7. One incident timeline
+
+Each incident maintains a timeline of important events such as:
+
+-   citizen report
+-   location verification
+-   AI analysis
+-   agency routing
+-   resource approval
+-   dispatch
+-   responders en route
+-   arrival
+-   resolution
+
+This provides a simple operational history rather than forcing users to
+reconstruct what happened from separate messages.
+
+------------------------------------------------------------------------
+
+# 🏗️ System Architecture
+
+``` text
+                         ┌─────────────────────┐
+                         │      Citizen        │
+                         │   Report / Location │
+                         └──────────┬──────────┘
+                                    │
+                                    ▼
+                         ┌─────────────────────┐
+                         │   React Frontend    │
+                         │ Dashboards + Maps   │
+                         └───────┬─────┬───────┘
+                                 │     │
+                   AI analysis   │     │ Incident / Resource API
+                                 │     │
+                                 ▼     ▼
+                    ┌──────────────┐  ┌──────────────────┐
+                    │   Supabase   │  │     FastAPI      │
+                    │ Edge Function│  │ Backend API      │
+                    └──────┬───────┘  └────────┬─────────┘
+                           │                   │
+                           ▼                   ▼
+                    ┌──────────────┐   ┌──────────────────┐
+                    │ Featherless  │   │   PostgreSQL     │
+                    │ AI / DeepSeek│   │ incidents        │
+                    └──────────────┘   │ resources        │
+                                       │ assignments      │
+                                       └──────────────────┘
+
+                         ┌─────────────────────┐
+                         │ Resource Engine     │
+                         │                     │
+                         │ availability        │
+                         │ resource type       │
+                         │ distance            │
+                         │ nearest matching    │
+                         └──────────┬──────────┘
+                                    │
+                                    ▼
+                         ┌─────────────────────┐
+                         │ Dispatch / Status   │
+                         │ assigned → en route │
+                         │ → arrived → resolved│
+                         └─────────────────────┘
+```
+
+------------------------------------------------------------------------
+
+# 🧠 AI Architecture
+
+RESQ uses a Supabase Edge Function as the server-side AI gateway.
+
+The Edge Function calls:
+
+**Featherless AI** - Model: `deepseek-ai/DeepSeek-V3.2`
+
+The AI is instructed to return structured JSON rather than free-form
+text.
+
+The response is validated for:
+
+-   severity
+-   priority
+-   urgency
+-   people at risk
+-   hazards
+-   response domains
+-   recommended resource types
+-   summary
+-   responder guidance
+
+This creates a predictable interface between the AI layer and the rest
+of the application.
+
+### AI safety boundary
+
+The AI is used for **context analysis and recommendations**.
+
+It is explicitly not responsible for:
+
+-   directly modifying resources
+-   directly creating database assignments
+-   bypassing human approval
+-   replacing professional emergency protocols
+
+------------------------------------------------------------------------
+
+# 🗺️ Resource Allocation Engine
+
+The resource engine is implemented separately from the AI service.
+
+Supported resource types include:
+
+-   `ambulance`
+-   `fire_truck`
+-   `police`
+-   `rescue`
+
+The engine accepts a requirement such as:
+
+``` text
+2 × Fire Truck
+1 × Ambulance
+1 × Police Unit
+```
+
+and converts it into structured requirements:
+
+``` text
+fire_truck: 2
+ambulance: 1
+police: 1
+```
+
+It then selects the nearest available eligible resources.
+
+If enough resources do not exist, the engine returns an **unfulfilled
+requirement** instead of silently pretending that the full response is
+possible.
+
+------------------------------------------------------------------------
+
+# 🗄️ Backend & Database
+
+RESQ includes a FastAPI backend backed by PostgreSQL through SQLAlchemy.
+
+### Database entities
+
+#### `incidents`
+
+Stores:
+
+-   incident description
+-   latitude
+-   longitude
+-   status
+-   priority
+-   creation timestamp
+
+#### `resources`
+
+Stores:
+
+-   resource name
+-   resource type
+-   latitude
+-   longitude
+-   availability/status
+
+#### `assignments`
+
+Connects incidents with resources and stores:
+
+-   incident ID
+-   resource ID
+-   assignment status
+-   assignment timestamp
+
+### Backend API
+
+  Method   Endpoint                   Purpose
+  -------- -------------------------- ----------------------------------
+  GET      `/`                        Backend health/message
+  GET      `/health`                  Health check
+  POST     `/incidents`               Create an incident
+  GET      `/incidents`               List incidents
+  GET      `/incidents/{id}`          Get one incident
+  PATCH    `/incidents/{id}/status`   Update incident status
+  POST     `/resources`               Create a resource
+  GET      `/resources`               List resources
+  GET      `/resources/available`     List available resources
+  PATCH    `/resources/{id}/status`   Update resource status
+  POST     `/assign`                  Assign a resource to an incident
+
+FastAPI also exposes interactive API documentation at:
+
+``` text
+http://127.0.0.1:8000/docs
+```
+
+------------------------------------------------------------------------
+
+# 🖥️ User Roles
+
+RESQ provides role-specific interfaces for:
+
+  Role       Responsibility
+  ---------- -------------------------------------------------
+  Citizen    Submit and track emergencies
+  Fire       View fire-related incidents
+  Medical    View medical incidents and response information
+  Police     View police-related incidents
+  Accident   Handle accident-domain incidents
+  Disaster   Handle disaster-domain incidents
+  Command    Coordinate incidents, resources, and approvals
+
+------------------------------------------------------------------------
+
+# ✨ Main Product Features
+
+### Citizen Experience
+
+-   Emergency reporting
+-   Category selection
+-   Location capture / confirmation
+-   Description, image and voice report fields
+-   Processing state
+-   Active emergency tracking
+
+### Command Center
+
+-   Unified incident view
+-   Priority and severity visibility
+-   Affected response domains
+-   Incident timeline
+-   Resource assignment
+-   AI alerts
+-   Incident fusion demonstration
+-   Resource reallocation demonstration
+
+### Responder Experience
+
+-   Domain-specific incident information
+-   Incident details
+-   Response status
+-   Responder guidance
+-   Operational timeline
+
+### Resource Operations
+
+-   Resource availability tracking
+-   Resource type matching
+-   Distance-aware allocation
+-   Assignment status
+-   Resource release
+-   Partial-allocation / shortage indication
+
+------------------------------------------------------------------------
+
+# 📁 Project Structure
+
+``` text
+RESQ/
+│
+├── src/
+│   ├── App.tsx
+│   ├── api.ts
+│   ├── types.ts
+│   │
+│   ├── components/
+│   │   ├── DemoPanel.tsx
+│   │   ├── FusionDemoOverlay.tsx
+│   │   ├── LiveLocationPicker.tsx
+│   │   ├── LiveMap.tsx
+│   │   ├── Shared.tsx
+│   │   ├── ThemeToggle.tsx
+│   │   └── ToastSystem.tsx
+│   │
+│   ├── context/
+│   │   └── AppContext.tsx
+│   │
+│   ├── data/
+│   │   └── mockData.ts
+│   │
+│   ├── services/
+│   │   └── incidentAnalysis.ts
+│   │
+│   ├── utils/
+│   │   └── resourceEngine.ts
+│   │
+│   └── views/
+│       ├── LoginView.tsx
+│       ├── citizen/
+│       ├── command/
+│       └── responder/
+│
+├── backend/
+│   ├── database.py
+│   ├── main.py
+│   └── models.py
+│
+├── member4/
+│   ├── data/
+│   ├── map/
+│   └── utils/
+│
+├── supabase/
+│   └── functions/
+│       └── analyze-incident/
+│           └── index.ts
+│
+├── package.json
+├── package-lock.json
+└── pnpm-lock.yaml
+```
+
+------------------------------------------------------------------------
+
+# 🛠️ Tech Stack
 
 ### Frontend
 
-The frontend is a React 19 single-page application built with Vite, TypeScript, and Tailwind CSS v4.
+-   React 19
+-   TypeScript
+-   Vite
+-   Tailwind CSS
 
-Important frontend locations:
+### AI
 
-- `src/main.tsx` mounts the application and imports global styles.
-- `src/App.tsx` selects the active view and mounts the global overlays.
-- `src/context/AppContext.tsx` owns application state, workflow transitions, demo data, notifications, approvals, and integration calls.
-- `src/views/citizen/` contains citizen reporting and tracking screens.
-- `src/views/responder/` contains domain-manager dashboards and incident details.
-- `src/views/command/CommandCenter.tsx` contains the system-wide operations view.
-- `src/components/LiveMap.tsx` renders the operational map.
-- `src/components/DemoPanel.tsx` provides demo scenarios and role switching.
-- `src/services/incidentAnalysis.ts` calls the Supabase Edge Function from the browser.
-- `src/api.ts` calls the local FastAPI service at `http://127.0.0.1:8000`.
+-   Featherless AI
+-   DeepSeek-V3.2
+-   Supabase Edge Function as the AI gateway
 
-### Local FastAPI service
+### Backend
 
-The `backend/` directory contains a separate FastAPI application using SQLAlchemy and PostgreSQL.
+-   Python
+-   FastAPI
+-   SQLAlchemy
+-   PostgreSQL
+-   psycopg
 
-- `backend/main.py` exposes incident, resource, assignment, and health endpoints.
-- `backend/models.py` defines the `incidents`, `resources`, and `assignments` ORM models.
-- `backend/database.py` creates the PostgreSQL engine and session dependency.
+### Core Algorithms
 
-The local backend is used by the frontend for loading and saving incidents and resources. Its default database connection is currently defined in `backend/database.py` and points to a local PostgreSQL database named `resq_db`.
+-   nearest-resource matching
+-   distance calculation
+-   availability filtering
+-   requirement parsing
+-   resource assignment/release
+-   incident fusion workflow
 
-### Supabase Edge Function
+------------------------------------------------------------------------
 
-`supabase/functions/analyze-incident/index.ts` is the server-side AI boundary.
+# 🚀 Getting Started
 
-It:
+## 1. Clone the repository
 
-1. Receives a category, description, location, and optional ETA context.
-2. Reads `FEATHERLESS_API_KEY` from Supabase Edge Function secrets.
-3. Calls `https://api.featherless.ai/v1/chat/completions`.
-4. Uses the required model `deepseek-ai/DeepSeek-V3.2`.
-5. Requests structured JSON.
-6. Validates the returned severity, priority, urgency, hazards, domains, resources, summary, and responder guidance.
-7. Returns the validated analysis to the frontend.
-
-The key is never intended to be placed in React code, `.env.local`, `VITE_*` variables, browser requests, Git, logs, or UI text.
-
-## Prerequisites
-
-Install or make available:
-
-- Node.js 22 or a compatible current Node.js release.
-- npm or pnpm.
-- Python 3.11 or newer.
-- PostgreSQL if you want the local FastAPI service to run.
-- Supabase CLI if you need to deploy or manage the Edge Function.
-- A Featherless account and API key with access to `deepseek-ai/DeepSeek-V3.2`.
-
-For the local backend, the Python packages used by the current code include:
-
-- `fastapi`
-- `uvicorn`
-- `sqlalchemy`
-- `psycopg[binary]`
-
-If the environment does not already have them:
-
-```bash
-python -m pip install fastapi uvicorn sqlalchemy "psycopg[binary]"
+``` bash
+git clone <repository-url>
+cd RESQ
 ```
 
-## Frontend Setup
+## 2. Install frontend dependencies
 
-Install JavaScript dependencies from the repository root:
-
-```bash
+``` bash
 npm install
 ```
 
-The repository also contains `pnpm-lock.yaml`. Use one package manager consistently for a given environment. Do not mix npm and pnpm lockfile updates casually.
+## 3. Start the frontend
 
-Create `.env.local` in the repository root. Only public Supabase client values belong here:
-
-```env
-VITE_SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
-VITE_SUPABASE_ANON_KEY=YOUR_SUPABASE_ANON_KEY
-```
-
-The frontend derives the Edge Function URL from `VITE_SUPABASE_URL`. An optional explicit override is supported:
-
-```env
-VITE_SUPABASE_FUNCTION_URL=https://YOUR_PROJECT_REF.supabase.co/functions/v1/analyze-incident
-```
-
-Do not add this variable with the literal value `YOUR_PROJECT_REF`; either replace it with the real project reference or omit the variable and let the frontend derive the URL.
-
-Start the frontend:
-
-```bash
+``` bash
 npm run dev
 ```
 
-Vite normally serves ResQ at:
+The Vite development server will display the local URL in the terminal.
 
-```text
-http://localhost:8443/
+------------------------------------------------------------------------
+
+## 4. Configure the AI service
+
+The frontend AI integration expects:
+
+``` text
+VITE_SUPABASE_FUNCTION_URL
+VITE_SUPABASE_ANON_KEY
 ```
 
-If port 8443 is unavailable, Vite may choose another port. Use the URL printed by the command.
+The function URL should point to the deployed `analyze-incident`
+Supabase Edge Function.
 
-## Local FastAPI and PostgreSQL Setup
+The Edge Function requires the server-side secret:
 
-The local backend expects PostgreSQL at:
-
-```text
-localhost:5432
-```
-
-The current connection string in `backend/database.py` expects:
-
-```text
-Database: resq_db
-User: postgres
-Password: the value configured in backend/database.py
-```
-
-For a real deployment, move this connection string to a server-side environment variable and rotate any credential that has been committed or shared. The current repository code is suitable for the local demo arrangement, not production secret management.
-
-Create the database before starting the API. For example, from a PostgreSQL shell with sufficient privileges:
-
-```sql
-CREATE DATABASE resq_db;
-```
-
-Start FastAPI from the `backend` directory. Starting it from the repository root will fail because `main.py` uses local imports such as `from database import engine`.
-
-```bash
-cd backend
-python -m uvicorn main:app --host 0.0.0.0 --port 8000
-```
-
-Check the service:
-
-```text
-http://127.0.0.1:8000/
-http://127.0.0.1:8000/health
-```
-
-Expected health response:
-
-```json
-{"status":"healthy"}
-```
-
-The frontend can still load its built-in demo data if the local API is unavailable, but backend loading and persistence will not work until PostgreSQL and FastAPI are available.
-
-## Supabase and Featherless Setup
-
-The frontend does not call Featherless directly. The intended production path is:
-
-```text
-React browser
-  -> Supabase Edge Function: analyze-incident
-  -> Featherless chat completions API
-```
-
-### 1. Get the public Supabase values
-
-In Supabase Dashboard, open **Project Settings -> API** and copy:
-
-- Project URL into `VITE_SUPABASE_URL`.
-- Publishable/anon key into `VITE_SUPABASE_ANON_KEY`.
-
-The anon key is designed for client use. It is not the Featherless secret.
-
-### 2. Authenticate and link the Supabase CLI
-
-From the repository root:
-
-```bash
-npx supabase login
-npx supabase link --project-ref YOUR_PROJECT_REF
-```
-
-The project reference is the subdomain in the Supabase project URL. If this repository has no local `supabase/config.toml`, the `supabase link` command creates the local project linkage.
-
-### 3. Store the Featherless key server-side
-
-Create a key in Featherless through **Profile -> API Keys -> Create a new key**. Featherless keys normally begin with `fw-`.
-
-Set it as a Supabase Edge Function secret:
-
-```bash
-npx supabase secrets set FEATHERLESS_API_KEY=fw-YOUR_FEATHERLESS_KEY
-```
-
-Do not put this value in `.env.local`, `VITE_*` variables, source files, README files, browser requests, or Git.
-
-The same secret can be configured in Supabase Dashboard under the Edge Function secrets/settings area. The name must be exactly:
-
-```text
+``` text
 FEATHERLESS_API_KEY
 ```
 
-### 4. Deploy the existing function
+Do **not** expose the Featherless API key in frontend code.
 
-Do not create a second AI function. Deploy the existing function:
+------------------------------------------------------------------------
 
-```bash
-npx supabase functions deploy analyze-incident
+## 5. Configure PostgreSQL
+
+The FastAPI backend expects a PostgreSQL database named:
+
+``` text
+resq_db
 ```
 
-The function must be deployed to the same project referenced by `VITE_SUPABASE_URL`.
+The backend database connection is defined in:
 
-### 5. Test the deployed function
-
-Use the public Supabase anon key for the Edge Function request. Never use the Featherless key in this command from a browser or frontend context.
-
-Windows Command Prompt:
-
-```cmd
-curl -i -X POST "https://YOUR_PROJECT_REF.supabase.co/functions/v1/analyze-incident" ^
-  -H "apikey: YOUR_SUPABASE_ANON_KEY" ^
-  -H "Authorization: Bearer YOUR_SUPABASE_ANON_KEY" ^
-  -H "Content-Type: application/json" ^
-  --data "{\"category\":\"crime\",\"description\":\"Someone attacked a person and their leg is bleeding badly. The attacker is still nearby.\"}"
+``` text
+backend/database.py
 ```
 
-A successful response should have HTTP status `200` and include:
+Before production use, move database credentials into environment
+variables and never commit real passwords or secrets to Git.
 
-```json
-{
-  "model": "deepseek-ai/DeepSeek-V3.2",
-  "analysis": {
-    "severity": "critical",
-    "priority": "P1",
-    "urgency": "immediate",
-    "response_domains": ["police", "medical"]
-  }
-}
-```
+Install the required Python packages for the backend, then run:
 
-The exact model wording and list contents can vary. The Edge Function validates the structure before returning it.
-
-Expected failure meanings:
-
-- `401`: Featherless did not recognize the server key. Check the key or create a new one.
-- `403`: The model is gated or unavailable to the account. Unlock access to `deepseek-ai/DeepSeek-V3.2`.
-- `429`: Featherless rate limit was reached.
-- `502`: The provider response was rejected, invalid, or unavailable.
-- `503`: Temporary provider failure or the server secret is not configured.
-- `504`: The provider request timed out.
-
-The system must never silently switch to Groq, OpenRouter, OpenAI, Gemini, or another provider.
-
-## AI Analysis Contract
-
-The Edge Function sends the selected category as authoritative context. Featherless is asked to analyze the report context, not to replace the citizen's selected category.
-
-The expected analysis shape is:
-
-```json
-{
-  "severity": "critical|high|moderate|low",
-  "priority": "P1|P2|P3|P4",
-  "urgency": "immediate|urgent|soon|routine",
-  "people_at_risk": 0,
-  "hazards": [],
-  "response_domains": [],
-  "recommended_resource_types": [],
-  "summary": "",
-  "responder_guidance": {
-    "police": [],
-    "medical": [],
-    "fire": [],
-    "rescue": []
-  }
-}
-```
-
-The model can return multiple relevant response domains. For example, a crime report involving severe bleeding and an active threat should normally reach both police and medical teams.
-
-Responder guidance is intended to be concise, non-tactical pre-arrival preparation. It must not replace professional protocols or provide dangerous instructions.
-
-## Incident Workflow
-
-### Citizen flow
-
-1. Choose the Citizen role on the login screen.
-2. Open the report flow.
-3. Select a category.
-4. Confirm or choose a location.
-5. Add a description and optional evidence controls.
-6. Submit the report.
-7. Watch the processing screen.
-8. Follow the active emergency view as the incident progresses.
-
-### Manager flow
-
-1. Choose Fire, Medical, Police, Accident, or Disaster Manager.
-2. Open an active incident.
-3. Review the AI analysis and recommended resources.
-4. Approve the recommended resources.
-5. Follow assignment, dispatch, en route, arrival, and resolution changes.
-
-### Command flow
-
-1. Choose Command Center.
-2. Review the system-wide incident feed.
-3. Use Live Map for the operational view.
-4. Review Critical incidents, Resources, AI Alerts, and Analytics.
-5. Select an incident to open its operational report.
-
-### Demo panel
-
-After entering a non-login view, the floating Demo control can trigger:
-
-- Crime + Medical: demonstrates police and medical routing.
-- Multi-Vehicle Accident: demonstrates multi-domain response.
-- Duplicate Fusion: demonstrates the existing report-fusion animation.
-- Dynamic Reallocation: demonstrates resource replacement when a recommendation becomes unavailable.
-
-The demo panel can also switch roles without leaving the application.
-
-## Backend API Reference
-
-The local FastAPI service is currently hard-coded to `http://127.0.0.1:8000` in `src/api.ts`.
-
-### Health
-
-```http
-GET /
-GET /health
-```
-
-### Incidents
-
-```http
-GET /incidents
-GET /incidents/{incident_id}
-POST /incidents?description=...&latitude=...&longitude=...&priority=medium
-PATCH /incidents/{incident_id}/status?status=assigned
-```
-
-### Resources
-
-```http
-GET /resources
-GET /resources/available
-POST /resources?name=...&resource_type=...&latitude=...&longitude=...
-PATCH /resources/{resource_id}/status?status=en_route
-```
-
-### Assignments
-
-```http
-POST /assign?incident_id=...&resource_id=...
-```
-
-The assignment endpoint checks that both records exist and that the selected resource is available before creating an assignment and marking the incident and resource as assigned.
-
-## Data and State Boundaries
-
-There are currently two data paths in the application:
-
-1. Demo and UI state is held in `AppContext` and initialized from `src/data/mockData.ts`.
-2. Incidents and resources are also loaded/saved through the local FastAPI/PostgreSQL service when it is available.
-
-The Featherless analysis result is returned through the Supabase Edge Function and applied to the in-memory incident object. The current repository does not yet contain a dedicated Supabase database schema or a Supabase write-back for the full AI analysis document. This distinction matters:
-
-- Featherless analysis integration is real and server-side.
-- Local FastAPI persistence is real when PostgreSQL is running.
-- Full Supabase report plus AI-analysis persistence is not yet complete.
-- A browser refresh can still lose parts of the UI/demo state.
-
-The map is a display layer. It does not perform AI analysis and does not decide routing.
-
-## Fallback Behavior
-
-A report receives an initial deterministic analysis so the UI can continue if the provider is unavailable. That initial result is marked:
-
-```text
-analysisSource: resq_fallback
-```
-
-When the Edge Function returns valid Featherless output, the same incident is updated with the model-derived result and marked:
-
-```text
-analysisSource: featherless
-```
-
-The fallback is used for conditions such as:
-
-- Missing Supabase function configuration.
-- Missing Supabase anon key.
-- Featherless authentication failure.
-- Gated or unavailable model.
-- Rate limiting.
-- Provider errors.
-- Timeout.
-- Empty or invalid model JSON.
-
-The frontend should not describe fallback output as Featherless output.
-
-## Verification Checklist
-
-Run the following checks before a demo:
-
-```bash
-npm run build
-```
-
-Then confirm:
-
-- The frontend opens at the Vite URL.
-- The FastAPI health endpoint returns healthy if local persistence is being used.
-- The Supabase Edge Function is deployed and ACTIVE.
-- `FEATHERLESS_API_KEY` exists as a Supabase Edge Function secret.
-- A direct Edge Function request returns HTTP `200`.
-- The response model is `deepseek-ai/DeepSeek-V3.2`.
-- The crime test returns broadly critical/P1/immediate analysis.
-- Police and medical appear in the response domains for the crime test.
-- The browser does not contain the Featherless key.
-- A citizen report reaches processing and active response views.
-- A manager can review and approve resources.
-- The Command Center can see the incident.
-- The map displays locations and status without making routing decisions.
-- A failed provider request remains clearly marked as `resq_fallback`.
-
-## Troubleshooting
-
-### The frontend is blank
-
-Check the browser console and restart Vite. Confirm that the active view and role are valid. Run:
-
-```bash
-npm run build
-```
-
-The app must be started from the repository root for Vite aliases and environment loading to work.
-
-### The FastAPI service will not start
-
-Start it from `backend/`:
-
-```bash
+``` bash
 cd backend
-python -m uvicorn main:app --host 0.0.0.0 --port 8000
+python -m uvicorn main:app --reload
 ```
 
-If you see `ModuleNotFoundError: No module named 'psycopg'`, install:
+The backend will be available at:
 
-```bash
-python -m pip install "psycopg[binary]"
+``` text
+http://127.0.0.1:8000
 ```
 
-If startup hangs or fails while connecting to PostgreSQL, start PostgreSQL and verify that `resq_db` exists and that the credentials in `backend/database.py` are correct.
+Interactive API documentation:
 
-### The frontend reports backend fetch failures
-
-The local API is optional for displaying built-in demo data, but backend incidents and resources require FastAPI on port 8000. Check:
-
-```text
-http://127.0.0.1:8000/health
+``` text
+http://127.0.0.1:8000/docs
 ```
 
-Also check that the frontend origin is one of the allowed CORS origins in `backend/main.py`.
+------------------------------------------------------------------------
 
-### The Edge Function returns 401
+# ▶️ Recommended Demo Flow
 
-The Featherless key is missing, expired, malformed, or not recognized. Replace the Supabase secret without displaying it:
+For a strong project demonstration:
 
-```bash
-npx supabase secrets set FEATHERLESS_API_KEY=fw-YOUR_FEATHERLESS_KEY
-npx supabase functions deploy analyze-incident
+### Step 1 --- Citizen
+
+Log in as a citizen and submit an emergency.
+
+Show:
+
+``` text
+Category
+↓
+Location
+↓
+Description
+↓
+Report submitted
 ```
 
-### The Edge Function returns 403
+### Step 2 --- AI Analysis
 
-The requested model is gated. Unlock `deepseek-ai/DeepSeek-V3.2` in Featherless for the account associated with the key. Do not replace the model or provider.
+Show the processing stage and explain that RESQ sends incident context
+to the AI service.
 
-### The Edge Function is never called
+Highlight:
 
-Check that `.env.local` contains:
+-   severity
+-   priority
+-   urgency
+-   hazards
+-   people at risk
+-   response domains
+-   resource requirements
 
-```env
-VITE_SUPABASE_URL=https://YOUR_PROJECT_REF.supabase.co
-VITE_SUPABASE_ANON_KEY=YOUR_SUPABASE_ANON_KEY
+### Step 3 --- Command Center
+
+Open the incident in the Command Center.
+
+Show how one incident becomes a shared operational picture.
+
+### Step 4 --- Resource Decision
+
+Explain:
+
+> "The AI identifies what kind of response is required. Our
+> deterministic allocation engine then chooses the nearest available
+> units."
+
+Show the selected resources.
+
+### Step 5 --- Approval & Dispatch
+
+Approve the response and show the transition:
+
+``` text
+Awaiting Approval
+       ↓
+Assigned
+       ↓
+En Route
+       ↓
+Arrived
+       ↓
+Resolved
 ```
 
-If `VITE_SUPABASE_FUNCTION_URL` is present, verify that it does not still contain `YOUR_PROJECT_REF`.
+### Step 6 --- Explain the real-world value
 
-Restart Vite after changing environment variables. Vite reads them when the development server starts.
+Close with:
 
-## Project Scripts
+> **"RESQ is designed to reduce coordination overhead during the most
+> time-sensitive moments --- turning fragmented reports into a
+> structured incident and helping teams make faster, more informed
+> resource decisions."**
 
-```bash
-npm run dev       # Start the Vite development server
-npm run build     # Create a production build
-npm run preview   # Serve the production build locally
-npm run format    # Format files with oxfmt
+------------------------------------------------------------------------
+
+# 🌍 Real-World Impact
+
+RESQ is designed around a practical emergency-response problem:
+**coordination under time pressure**.
+
+Potential real-world benefits include:
+
+### Faster information synthesis
+
+Instead of manually reading and comparing multiple reports, command
+teams receive structured incident context.
+
+### Better resource utilization
+
+Nearest-resource matching can reduce unnecessary travel and make limited
+emergency resources easier to allocate.
+
+### Reduced information fragmentation
+
+Citizens, command teams, and responders work from the same incident
+representation.
+
+### Cross-agency coordination
+
+A single incident can involve medical, fire, police, accident, and
+disaster response domains.
+
+### Better operational transparency
+
+The incident timeline records important decisions and status changes,
+helping teams understand how an emergency evolved.
+
+### Graceful handling of shortages
+
+When the requested number of resources is unavailable, RESQ exposes the
+unfulfilled requirement rather than hiding the shortage.
+
+> **The goal is not simply to build another emergency reporting app. The
+> goal is to build a coordination layer between information,
+> intelligence, resources, and human decision-making.**
+
+------------------------------------------------------------------------
+
+# 🔐 Responsible AI & Operational Boundaries
+
+RESQ is designed as a decision-support and coordination prototype.
+
+The AI:
+
+-   produces structured incident context
+-   identifies hazards and urgency
+-   recommends resource types
+-   provides concise responder guidance
+
+The system does **not** treat AI output as an autonomous dispatch
+authority.
+
+Human approval remains part of the response workflow.
+
+The AI prompt also instructs the model that responder guidance must be
+safe, non-tactical pre-arrival preparation and must not replace
+professional emergency protocols.
+
+------------------------------------------------------------------------
+
+# 🧪 Testing
+
+The repository contains multiple tests for the resource-management
+subsystem, including:
+
+``` text
+member4/utils/testAllocation.js
+member4/utils/testAllocationEngine.js
+member4/utils/testAssignmentFormatter.js
+member4/utils/testDistance.js
+member4/utils/testMapDataFormatter.js
+member4/utils/testMultipleIncidents.js
+member4/utils/testReleaseResources.js
+member4/utils/testResourceFilter.js
+member4/utils/testResourceManager.js
+member4/utils/testResourceMatcher.js
+member4/utils/testResourceStatus.js
+member4/utils/testScenarios.js
 ```
 
-There is currently no dedicated `test` or `typecheck` script in `package.json`. The production build is the primary automated frontend validation command.
+These cover resource filtering, distance calculation, matching,
+allocation, assignment formatting, status management, release behavior,
+and multiple-incident scenarios.
 
-## Repository Layout
+------------------------------------------------------------------------
 
-```text
-.
-├── backend/
-│   ├── database.py              PostgreSQL and SQLAlchemy session setup
-│   ├── main.py                  FastAPI routes
-│   └── models.py                Incident, resource, and assignment models
-├── member4/                     Supporting allocation/map utilities and tests
-├── src/
-│   ├── components/              Shared UI components and map
-│   ├── context/                 Global application state and workflow logic
-│   ├── data/                    Demo users, incidents, resources, and alerts
-│   ├── services/                Supabase Edge Function client
-│   ├── views/                   Citizen, responder, and command screens
-│   ├── api.ts                   Local FastAPI client
-│   ├── App.tsx                  Application view switcher
-│   ├── index.css                Theme, typography, animation, and global styles
-│   ├── main.tsx                 React entrypoint
-│   └── types.ts                 Shared TypeScript domain types
-├── supabase/
-│   └── functions/
-│       └── analyze-incident/    Featherless server-side integration
-├── .env.example                 Public environment variable template
-├── package.json                 Frontend scripts and dependencies
-├── tsconfig.json                TypeScript configuration
-└── vite.config.ts               Vite and Tailwind configuration
+# ⚠️ Prototype / Development Notes
+
+RESQ is currently a hackathon/prototype implementation.
+
+Some operational data is represented through demo/mock data so the
+complete user experience can be demonstrated without a live
+emergency-services infrastructure.
+
+The repository also contains:
+
+-   a local PostgreSQL/FastAPI backend
+-   a Supabase Edge Function for AI analysis
+-   demo scenarios for incident fusion and resource reallocation
+-   simulated response progression for demonstration purposes
+
+For production deployment, the platform would require additional work
+such as:
+
+-   secure authentication and authorization
+-   production-grade secret management
+-   encrypted communications
+-   real emergency-service integrations
+-   authoritative GIS / routing data
+-   real-time event infrastructure
+-   stronger audit controls
+-   reliability and observability
+-   formal emergency-service validation
+-   comprehensive security and privacy review
+
+------------------------------------------------------------------------
+
+# 🚀 Future Vision
+
+RESQ can evolve toward a city-scale emergency coordination layer with:
+
+-   real-time emergency-service integrations
+-   live GIS routing and traffic-aware ETA
+-   real-time responder location
+-   hospital capacity integration
+-   richer multimodal incident evidence
+-   predictive resource positioning
+-   city-wide incident heatmaps
+-   stronger duplicate-incident detection
+-   resilient offline / low-connectivity operation
+-   advanced operational analytics
+
+------------------------------------------------------------------------
+
+# 🏆 Why RESQ Matters
+
+Emergency response is ultimately a race against time.
+
+RESQ focuses on the part between **receiving information** and
+**coordinating the right response**.
+
+Its core idea is simple:
+
+``` text
+More structured information
+          +
+Better incident intelligence
+          +
+Smarter resource selection
+          +
+Human oversight
+          =
+Better coordinated emergency response
 ```
 
-## Security Notes
-
-- Treat the Featherless key as a server secret.
-- Never use `VITE_FEATHERLESS_API_KEY`; all `VITE_*` values are exposed to the browser bundle.
-- Never commit `.env.local` or any file containing a real secret.
-- Use the Supabase anon key only for the browser-to-Supabase request.
-- Restrict Edge Function access and add rate limiting/authentication before production use.
-- Move the local PostgreSQL password out of source before deploying the FastAPI service.
-- Do not log full authorization headers or provider response data that might contain sensitive report information.
-
-## License and Ownership
-
-No license file is currently included in the repository. Add the appropriate project license before distributing the application outside the intended hackathon or team context.
+**RESQ --- turning emergency signals into coordinated action.**
